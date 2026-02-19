@@ -27,9 +27,7 @@ public class ToggleForm : Form
     {
         if (!_isCustom)
         {
-            var cursorPath = @"C:\Windows\Cursors\arrow_rm.cur";
-
-            IntPtr darkCursor = CursorManager.LoadCursorFromFile(cursorPath);
+            IntPtr darkCursor = CursorManager.LoadCursorFromFile(CursorManager.dark_cursor_path);
 
             if (darkCursor != IntPtr.Zero)
             {
@@ -38,7 +36,7 @@ public class ToggleForm : Form
             }
             else
             {
-                MessageBox.Show("Could not load cursor file at " + cursorPath);
+                MessageBox.Show("Could not load cursor file at " + CursorManager.dark_cursor_path);
             }
         }
         else
