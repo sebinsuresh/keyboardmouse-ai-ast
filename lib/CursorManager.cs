@@ -5,21 +5,19 @@ namespace keyboardmouse.lib;
 
 public class CursorManager
 {
-    // Imports the SetSystemCursor function
+    // Sets the system cursor for a specified cursor ID
     [DllImport("user32.dll")]
     public static extern bool SetSystemCursor(IntPtr hcur, uint id);
 
-    // Imports CopyIcon to ensure we don't destroy the original handle immediately
+    // Duplicates a cursor or icon handle
     [DllImport("user32.dll")]
     public static extern IntPtr CopyIcon(IntPtr hIcon);
 
-    // Imports LoadCursor to get a handle to a standard cursor
-    [DllImport("user32.dll")]
-    public static extern IntPtr LoadCursor(IntPtr hInstance, int lpCursorName);
-
+    // Performs a system-wide parameter operation (used here to reset cursors)
     [DllImport("user32.dll", EntryPoint = "SystemParametersInfo")]
     public static extern bool SystemParametersInfo(uint uiAction, uint uiParam, IntPtr pvParam, uint fWinIni);
 
+    // Loads a cursor from a file
     [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
     public static extern IntPtr LoadCursorFromFile(string path);
 
