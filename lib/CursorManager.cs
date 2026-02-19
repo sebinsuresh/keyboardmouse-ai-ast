@@ -24,6 +24,8 @@ public class CursorManager
 
     // Cursor ID for the standard arrow
     public const uint OCR_NORMAL = 32512;
+
+    // Action code for resetting system cursors
     public const uint SPI_SETCURSORS = 0x0057;
 
     public const string dark_cursor_path = @"C:\Windows\Cursors\arrow_rm.cur";

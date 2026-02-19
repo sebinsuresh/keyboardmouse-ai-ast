@@ -37,6 +37,7 @@ public class ToggleForm : Form
             else
             {
                 MessageBox.Show("Could not load cursor file at " + CursorManager.dark_cursor_path);
+                return;
             }
         }
         else
