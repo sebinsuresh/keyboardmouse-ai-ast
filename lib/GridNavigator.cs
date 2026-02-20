@@ -1,101 +1,71 @@
-using System;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 
 namespace keyboardmouse;
 
 /// <summary>
-/// Grid-based mouse navigation.
+/// Grid-based mouse navigation over the monitor containing the cursor.
 ///
-/// While active, the current monitor is divided into a <see cref="GridDivisions"/>×<see cref="GridDivisions"/>
-/// grid. Each <see cref="NavigateTo"/> call moves the mouse to the center of the selected cell and
-/// narrows the active region to that cell. A follow-up call within <see cref="SubdivideWindowMs"/> ms
-/// sub-divides the narrowed region; after the window expires the grid resets to the full monitor.
-/// Sub-division halts when cells reach <see cref="MinCellPx"/> pixels in either dimension.
+/// On activation the monitor is captured as the initial region. Navigation
+/// commands either drill the region down into a sub-cell or jump to a monitor
+/// half and reset the region. Tap counting and sequencing are handled by
+/// <see cref="GridInputHandler"/>; this class only acts on resolved commands.
 /// </summary>
 internal sealed class GridNavigator
 {
-    // -------------------------------------------------------------------------
-    // Configuration constants — easy to expose as settings in future
-    // -------------------------------------------------------------------------
-
-    /// <summary>Number of columns/rows in the grid.</summary>
     private const int GridDivisions = 3;
 
-    /// <summary>Minimum cell edge in pixels. Sub-division stops when reached.</summary>
+    /// <summary>Minimum cell edge in pixels — subdivision stops when reached.</summary>
     private const int MinCellPx = 4;
 
-    /// <summary>Window (ms) within which a follow-up key press triggers sub-division.</summary>
-    private const int SubdivideWindowMs = 500;
-
-    // -------------------------------------------------------------------------
-    // Instance state
-    // -------------------------------------------------------------------------
-
     private bool _isActive;
-    private RECT _monitorRect;    // full monitor rect captured at activation
-    private RECT _currentBounds;  // current sub-divided region
-    private long _lastMoveTickMs; // Environment.TickCount64 at last move; 0 = none
+    private RECT _monitorRect;   // full monitor rect captured at activation
+    private RECT _currentBounds; // current sub-divided region
 
-    // -------------------------------------------------------------------------
-    // Public API
-    // -------------------------------------------------------------------------
-
-    /// <summary>Whether grid navigation mode is currently active.</summary>
     public bool IsActive => _isActive;
 
-    /// <summary>
-    /// Activates grid mode. Detects the monitor that contains the cursor and
-    /// uses it as the initial grid region.
-    /// </summary>
-    public void Activate()
+    internal void Activate()
     {
-        _monitorRect = DetectCurrentMonitorRect();
+        _monitorRect = GetMonitorAtCursor();
         _currentBounds = _monitorRect;
-        _lastMoveTickMs = 0; // no previous move; first key always resets to monitor bounds
         _isActive = true;
     }
 
-    /// <summary>Deactivates grid mode and resets all navigation state.</summary>
-    public void Deactivate()
+    internal void Deactivate()
     {
         _isActive = false;
         _monitorRect = default;
         _currentBounds = default;
-        _lastMoveTickMs = 0;
     }
 
     /// <summary>
-    /// Moves the mouse to the center of grid cell (<paramref name="col"/>, <paramref name="row"/>)
-    /// within the current region, then narrows the active region to that cell for sub-division.
-    /// No-op when inactive.
+    /// Acts on a resolved navigation command from <see cref="GridInputHandler"/>.
+    ///   - Small sequence (< 3 taps): drill down one level into the current region.
+    ///   - Triple tap: jump to a monitor half and reset the region.
     /// </summary>
-    public void NavigateTo(int col, int row)
+    internal void Execute(int col, int row, int taps)
     {
         if (!_isActive) return;
 
-        long now = Environment.TickCount64;
-        if (_lastMoveTickMs == 0 || (now - _lastMoveTickMs) > SubdivideWindowMs)
-            _currentBounds = _monitorRect;
+        if (taps >= 3)
+            JumpToHalf(col, row);
+        else
+            DrillDown(col, row);
+    }
 
-        int boundsW = _currentBounds.right - _currentBounds.left;
-        int boundsH = _currentBounds.bottom - _currentBounds.top;
+    // -------------------------------------------------------------------------
 
-        // Once cells are at or below the minimum size, stop subdividing.
-        // Still move to center so the user keeps control.
-        if (boundsW / GridDivisions < MinCellPx || boundsH / GridDivisions < MinCellPx)
-        {
-            MouseInput.MoveTo(
-                (_currentBounds.left + _currentBounds.right) / 2,
-                (_currentBounds.top + _currentBounds.bottom) / 2);
-            _lastMoveTickMs = now;
-            return;
-        }
+    private void DrillDown(int col, int row)
+    {
+        int w = _currentBounds.right - _currentBounds.left;
+        int h = _currentBounds.bottom - _currentBounds.top;
 
-        int cellW = boundsW / GridDivisions;
-        int cellH = boundsH / GridDivisions;
+        if (w / GridDivisions < MinCellPx || h / GridDivisions < MinCellPx) return;
 
-        RECT selected = new()
+        int cellW = w / GridDivisions;
+        int cellH = h / GridDivisions;
+
+        _currentBounds = new RECT
         {
             left = _currentBounds.left + col * cellW,
             top = _currentBounds.top + row * cellH,
@@ -103,33 +73,43 @@ internal sealed class GridNavigator
             bottom = _currentBounds.top + (row + 1) * cellH,
         };
 
-        MouseInput.MoveTo(
-            (selected.left + selected.right) / 2,
-            (selected.top + selected.bottom) / 2);
-
-        _currentBounds = selected;
-        _lastMoveTickMs = now;
+        MoveToCenterOf(_currentBounds);
     }
 
-    // -------------------------------------------------------------------------
-    // Private helpers
-    // -------------------------------------------------------------------------
-
-    private static RECT DetectCurrentMonitorRect()
+    // col 0 → left half,  col 2 → right half,  col 1 → full width
+    // row 0 → top half,   row 2 → bottom half, row 1 → full height
+    private void JumpToHalf(int col, int row)
     {
-        // GetCursorPos uses System.Drawing.Point as directed by CsWin32 (POINT alias).
-        System.Drawing.Point cursor = default;
-        PInvoke.GetCursorPos(out cursor);
+        int midX = _monitorRect.left + (_monitorRect.right - _monitorRect.left) / 2;
+        int midY = _monitorRect.top + (_monitorRect.bottom - _monitorRect.top) / 2;
 
-        foreach (var rect in DisplayInfo.GetMonitorRects())
+        RECT target = _monitorRect;
+
+        if (col == 0) target.right = midX;
+        else if (col == 2) target.left = midX;
+
+        if (row == 0) target.bottom = midY;
+        else if (row == 2) target.top = midY;
+
+        _currentBounds = target;
+        MoveToCenterOf(_currentBounds);
+    }
+
+    private static void MoveToCenterOf(RECT r) =>
+        MouseInput.MoveTo((r.left + r.right) / 2, (r.top + r.bottom) / 2);
+
+    private static RECT GetMonitorAtCursor()
+    {
+        PInvoke.GetCursorPos(out System.Drawing.Point cursor);
+
+        foreach (RECT r in DisplayInfo.GetMonitorRects())
         {
-            if (cursor.X >= rect.left && cursor.X < rect.right &&
-                cursor.Y >= rect.top && cursor.Y < rect.bottom)
-                return rect;
+            if (cursor.X >= r.left && cursor.X < r.right &&
+                cursor.Y >= r.top && cursor.Y < r.bottom)
+                return r;
         }
 
-        // Fallback: first monitor, or virtual screen if none reported.
-        var rects = DisplayInfo.GetMonitorRects();
+        RECT[] rects = DisplayInfo.GetMonitorRects();
         return rects.Length > 0 ? rects[0] : DisplayInfo.GetVirtualScreenRect();
     }
 }
