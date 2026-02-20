@@ -5,7 +5,7 @@ using Windows.Win32.UI.Input.KeyboardAndMouse;
 
 namespace keyboardmouse;
 
-public static class MouseInput
+internal static class MouseInput
 {
     // INPUT size is fixed at compile time; cache it to avoid repeated reflection in Marshal.SizeOf.
     private static readonly int s_inputSize = Marshal.SizeOf<INPUT>();
@@ -14,7 +14,7 @@ public static class MouseInput
     /// Moves the mouse to absolute screen coordinates via SendInput.
     /// Coordinates are normalized to the 0–65535 range relative to the virtual screen.
     /// </summary>
-    public static void MoveTo(int x, int y)
+    internal static void MoveTo(int x, int y)
     {
         var vr = DisplayInfo.GetVirtualScreenRect();
         // Guard against a degenerate virtual screen (e.g., no monitor reported) to prevent division by zero.

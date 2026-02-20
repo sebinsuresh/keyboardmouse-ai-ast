@@ -26,3 +26,8 @@ DefWindowProc
 WM_DESTROY
 EnumDisplayMonitors
 SetCursorPos
+SetWindowsHookEx
+UnhookWindowsHookEx
+CallNextHookEx
+GetCursorPos
+KBDLLHOOKSTRUCT
