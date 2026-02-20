@@ -22,13 +22,15 @@ internal sealed class GridNavigator
     private RECT _monitorRect;   // full monitor rect captured at activation
     private RECT _currentBounds; // current sub-divided region
 
-    public bool IsActive => _isActive;
+    internal bool IsActive => _isActive;
+    internal Action<RECT>? OnBoundsChanged { get; set; }
 
     internal void Activate()
     {
         _monitorRect = GetMonitorAtCursor();
         _currentBounds = _monitorRect;
         _isActive = true;
+        OnBoundsChanged?.Invoke(_currentBounds);
     }
 
     internal void Deactivate()
@@ -36,13 +38,10 @@ internal sealed class GridNavigator
         _isActive = false;
         _monitorRect = default;
         _currentBounds = default;
+        OnBoundsChanged?.Invoke(default);
     }
 
-    /// <summary>
-    /// Acts on a resolved navigation command from <see cref="GridInputHandler"/>.
-    ///   - Small sequence (< 3 taps): drill down one level into the current region.
-    ///   - Triple tap: jump to a monitor half and reset the region.
-    /// </summary>
+    /// <summary>Acts on a resolved command from <see cref="GridInputHandler"/>.</summary>
     internal void Execute(int col, int row, int taps)
     {
         if (!_isActive) return;
@@ -74,6 +73,7 @@ internal sealed class GridNavigator
         };
 
         MoveToCenterOf(_currentBounds);
+        OnBoundsChanged?.Invoke(_currentBounds);
     }
 
     // col 0 → left half,  col 2 → right half,  col 1 → full width
@@ -93,6 +93,7 @@ internal sealed class GridNavigator
 
         _currentBounds = target;
         MoveToCenterOf(_currentBounds);
+        OnBoundsChanged?.Invoke(_currentBounds);
     }
 
     private static void MoveToCenterOf(RECT r) =>
@@ -102,14 +103,14 @@ internal sealed class GridNavigator
     {
         PInvoke.GetCursorPos(out System.Drawing.Point cursor);
 
-        foreach (RECT r in DisplayInfo.GetMonitorRects())
+        RECT[] rects = DisplayInfo.GetMonitorRects();
+        foreach (RECT r in rects)
         {
             if (cursor.X >= r.left && cursor.X < r.right &&
                 cursor.Y >= r.top && cursor.Y < r.bottom)
                 return r;
         }
 
-        RECT[] rects = DisplayInfo.GetMonitorRects();
         return rects.Length > 0 ? rects[0] : DisplayInfo.GetVirtualScreenRect();
     }
 }
