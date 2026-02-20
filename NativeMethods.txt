@@ -24,3 +24,5 @@ RegisterClass
 PostQuitMessage
 DefWindowProc
 WM_DESTROY
+EnumDisplayMonitors
+SetCursorPos
