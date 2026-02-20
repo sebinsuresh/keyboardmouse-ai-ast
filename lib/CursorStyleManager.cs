@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 
 namespace keyboardmouse.lib;
 
-public class CursorManager
+public class CursorStyleManager
 {
     // Sets the system cursor for a specified cursor ID
     [DllImport("user32.dll")]

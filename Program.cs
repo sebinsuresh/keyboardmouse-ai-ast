@@ -16,7 +16,7 @@ static class Program
         }
         finally
         {
-            CursorManager.RestoreDefaultCursors();
+            CursorStyleManager.RestoreDefaultCursors();
         }
     }
 }
