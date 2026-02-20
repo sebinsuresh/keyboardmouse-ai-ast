@@ -1,5 +1,6 @@
-using keyboardmouse.forms;
-using keyboardmouse.lib;
+using Windows.Win32;
+using Windows.Win32.Foundation;
+using Windows.Win32.UI.WindowsAndMessaging;
 
 namespace keyboardmouse;
 
@@ -8,15 +9,10 @@ static class Program
     [STAThread]
     static void Main()
     {
-        ApplicationConfiguration.Initialize();
-
-        try
+        while (PInvoke.GetMessage(out MSG msg, HWND.Null, 0, 0))
         {
-            Application.Run(new ToggleForm());
-        }
-        finally
-        {
-            CursorStyleManager.RestoreDefaultCursors();
+            PInvoke.TranslateMessage(in msg);
+            PInvoke.DispatchMessage(in msg);
         }
     }
 }
