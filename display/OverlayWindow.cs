@@ -1,5 +1,3 @@
-using System;
-using keyboardmouse.display;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.Graphics.Gdi;
@@ -12,22 +10,24 @@ namespace keyboardmouse.display;
 /// </summary>
 internal sealed class OverlayWindow
 {
-    private static OverlayWindow? s_instance;
+    private static OverlayWindow? instance;
 
-    private HWND _hwnd = HWND.Null;
+    private HWND _windowHandle = HWND.Null;
     private RECT _currentBounds = default;
     private int _virtualOriginX;
     private int _virtualOriginY;
 
-    // Hand-defined constants not emitted by CsWin32.
-    private const uint WS_POPUP = 0x80000000;
-    private const uint WS_EX_LAYERED = 0x00080000;
-    private const uint WS_EX_TRANSPARENT = 0x00000020;
-    private const uint WS_EX_TOPMOST = 0x00000008;
-    private const uint WS_EX_NOACTIVATE = 0x08000000;
-    private const uint LWA_COLORKEY = 0x00000001;
-    private const uint WM_PAINT = 0x000F;
+    private const WINDOW_EX_STYLE OverlayExStyle =
+        WINDOW_EX_STYLE.WS_EX_LAYERED |
+        WINDOW_EX_STYLE.WS_EX_TRANSPARENT |
+        WINDOW_EX_STYLE.WS_EX_TOPMOST |
+        WINDOW_EX_STYLE.WS_EX_NOACTIVATE;
 
+    // Set the color key for transparency: RGB(0, 0, 1) — the nearly-black pixel
+    private const int TransparentColor = 0x010000; // BGR format
+    private const ROP_CODE ReplaceWPatternRasterOpCode = (ROP_CODE)0x00F00021; // PATCOPY
+
+    // Need unsafe for 
     internal static unsafe void RegisterWindowClass()
     {
         const string className = "GridOverlay";
@@ -36,144 +36,155 @@ internal sealed class OverlayWindow
             WNDCLASSW wndClass = new()
             {
                 lpszClassName = (PCWSTR)classPtr,
-                lpfnWndProc = WndProc,
+                lpfnWndProc = WindowProcedure,
             };
 
-            ushort atom = PInvoke.RegisterClass(wndClass);
-            if (atom == 0)
+            if (PInvoke.RegisterClass(wndClass) == 0)
+            {
                 throw new InvalidOperationException("Failed to register overlay window class.");
+            }
         }
     }
 
-    public unsafe void Create()
+    public void Create()
     {
-        if (_hwnd != HWND.Null) return;
+        if (_windowHandle != HWND.Null) return;
 
-        s_instance = this;
+        instance = this;
 
         // Get the full virtual screen to size the overlay window.
         RECT virtualScreen = DisplayInfo.GetVirtualScreenRect();
         _virtualOriginX = virtualScreen.left;
         _virtualOriginY = virtualScreen.top;
 
-        WINDOW_EX_STYLE exStyle = (WINDOW_EX_STYLE)(WS_EX_LAYERED
-                                                   | WS_EX_TRANSPARENT
-                                                   | WS_EX_TOPMOST
-                                                   | WS_EX_NOACTIVATE);
-        WINDOW_STYLE style = (WINDOW_STYLE)WS_POPUP;
+        unsafe
+        {
+            _windowHandle = PInvoke.CreateWindowEx(
+                OverlayExStyle,
+                "GridOverlay",
+                "Grid Overlay",
+                WINDOW_STYLE.WS_POPUP,
+                virtualScreen.left,
+                virtualScreen.top,
+                virtualScreen.right - virtualScreen.left,
+                virtualScreen.bottom - virtualScreen.top,
+                HWND.Null,
+                null,
+                PInvoke.GetModuleHandle(null),
+                null
+            );
+        }
 
-        _hwnd = PInvoke.CreateWindowEx(
-            exStyle,
-            "GridOverlay",
-            "Grid Overlay",
-            style,
-            virtualScreen.left,
-            virtualScreen.top,
-            virtualScreen.right - virtualScreen.left,
-            virtualScreen.bottom - virtualScreen.top,
-            HWND.Null,
-            null,
-            PInvoke.GetModuleHandle((string?)null),
-            null
-        );
-
-        if (_hwnd == HWND.Null)
+        if (_windowHandle == HWND.Null)
+        {
             throw new InvalidOperationException("Failed to create overlay window.");
+        }
 
-        // Set the color key for transparency: RGB(0, 0, 1) — the nearly-black pixel
-        uint colorKey = 0x010000; // BGR format
         PInvoke.SetLayeredWindowAttributes(
-            _hwnd,
-            new COLORREF(colorKey),
+            _windowHandle,
+            new COLORREF(TransparentColor),
             255,
-            (LAYERED_WINDOW_ATTRIBUTES_FLAGS)LWA_COLORKEY
+            LAYERED_WINDOW_ATTRIBUTES_FLAGS.LWA_COLORKEY
         );
     }
 
     public void Show()
     {
-        if (_hwnd == HWND.Null) return;
-        PInvoke.ShowWindow(_hwnd, SHOW_WINDOW_CMD.SW_SHOWNOACTIVATE);
+        if (_windowHandle == HWND.Null) return;
+        PInvoke.ShowWindow(_windowHandle, SHOW_WINDOW_CMD.SW_SHOWNOACTIVATE);
     }
 
     public void Hide()
     {
-        if (_hwnd == HWND.Null) return;
-        PInvoke.ShowWindow(_hwnd, SHOW_WINDOW_CMD.SW_HIDE);
+        if (_windowHandle == HWND.Null) return;
+        PInvoke.ShowWindow(_windowHandle, SHOW_WINDOW_CMD.SW_HIDE);
     }
 
     public void UpdateBounds(RECT bounds)
     {
         _currentBounds = bounds;
-        if (_hwnd != HWND.Null)
-            PInvoke.InvalidateRect(_hwnd, null, true);
+        if (_windowHandle != HWND.Null)
+        {
+            PInvoke.InvalidateRect(_windowHandle, null, true);
+        }
     }
 
     public void Destroy()
     {
-        if (_hwnd != HWND.Null)
+        if (_windowHandle != HWND.Null)
         {
-            PInvoke.DestroyWindow(_hwnd);
-            _hwnd = HWND.Null;
+            PInvoke.DestroyWindow(_windowHandle);
+            _windowHandle = HWND.Null;
         }
-        s_instance = null;
+        instance = null;
     }
 
-    // =========================================================================
-    // Static WNDPROC dispatcher (AOT-safe, same pattern as KeyboardHook).
-    // =========================================================================
-
-    private static LRESULT WndProc(HWND hwnd, uint msg, WPARAM wParam, LPARAM lParam)
+    private static LRESULT WindowProcedure(HWND hwnd, uint msg, WPARAM wParam, LPARAM lParam)
     {
-        if (s_instance == null)
-            return PInvoke.DefWindowProc(hwnd, msg, wParam, lParam);
+        if (instance == null) return PInvoke.DefWindowProc(hwnd, msg, wParam, lParam);
 
-        if (msg == WM_PAINT)
-            return s_instance.OnWmPaint(hwnd);
-
-        if (msg == PInvoke.WM_DESTROY)
-            return s_instance.OnWmDestroy();
-
-        return PInvoke.DefWindowProc(hwnd, msg, wParam, lParam);
+        return msg switch
+        {
+            PInvoke.WM_PAINT => instance.OnWmPaint(hwnd),
+            PInvoke.WM_DESTROY => OnWmDestroy(),
+            _ => PInvoke.DefWindowProc(hwnd, msg, wParam, lParam)
+        };
     }
 
     private LRESULT OnWmPaint(HWND hwnd)
     {
-        PAINTSTRUCT ps = default;
+        HDC deviceCtxHandle = PInvoke.BeginPaint(hwnd, out PAINTSTRUCT ps);
 
-        unsafe
+        try
         {
-            HDC hdc = PInvoke.BeginPaint(hwnd, &ps);
+            PInvoke.GetClientRect(hwnd, out RECT clientRect);
+            FillWithTransparencyColor(deviceCtxHandle, clientRect);
 
-            try
+            // Only draw the grid when a valid region has been set.
+            if (_currentBounds.right > _currentBounds.left && _currentBounds.bottom > _currentBounds.top)
             {
-                PInvoke.GetClientRect(hwnd, out RECT clientRect);
-                FillWithTransparencyColor(hdc, clientRect);
-
-                // Only draw the grid when a valid region has been set.
-                if (_currentBounds.right > _currentBounds.left && _currentBounds.bottom > _currentBounds.top)
-                    PaintGrid(hdc);
-            }
-            finally
-            {
-                PInvoke.EndPaint(hwnd, &ps);
+                PaintGrid(deviceCtxHandle);
             }
         }
+        finally
+        {
+            PInvoke.EndPaint(hwnd, ps);
+        }
 
-        return default(LRESULT);
+        return default;
     }
 
-    private LRESULT OnWmDestroy()
+    private static LRESULT OnWmDestroy()
     {
         PInvoke.PostQuitMessage(0);
-        return default(LRESULT);
+        return default;
     }
 
-    private void PaintGrid(HDC hdc)
+    /// <summary>Fills the entire client area with the transparency color key, erasing previous content.</summary>
+    private static void FillWithTransparencyColor(HDC deviceCtxHandle, RECT clientRect)
+    {
+        HBRUSH keyBrush = PInvoke.CreateSolidBrush(new COLORREF(TransparentColor));
+        HGDIOBJ oldBrush = PInvoke.SelectObject(deviceCtxHandle, keyBrush);
+        try
+        {
+            PInvoke.PatBlt(deviceCtxHandle, clientRect.left, clientRect.top,
+                clientRect.right - clientRect.left,
+                clientRect.bottom - clientRect.top,
+                ReplaceWPatternRasterOpCode);
+        }
+        finally
+        {
+            // Restore the previous Windows drawing API GDI object and clean up the brush we created.
+            PInvoke.SelectObject(deviceCtxHandle, oldBrush);
+            PInvoke.DeleteObject(keyBrush);
+        }
+    }
+
+    private void PaintGrid(HDC deviceCtxHandle)
     {
         // Create a cyan pen (RGB 0,255,255 — Windows BGR format: 0xFFFF00).
         HPEN cyanPen = PInvoke.CreatePen(PEN_STYLE.PS_SOLID, 2, new COLORREF(0xFFFF00));
-        HGDIOBJ oldPen = PInvoke.SelectObject(hdc, cyanPen);
+        HGDIOBJ oldPen = PInvoke.SelectObject(deviceCtxHandle, cyanPen);
 
         try
         {
@@ -186,58 +197,51 @@ internal sealed class OverlayWindow
             int cellWidth = (right - left) / 3;
             int cellHeight = (bottom - top) / 3;
 
-            unsafe
-            {
-                DrawOuterBorder(hdc, left, top, right, bottom);
-                DrawInnerGridLines(hdc, left, top, right, bottom, cellWidth, cellHeight);
-            }
+            DrawOuterBorder(deviceCtxHandle, left, top, right, bottom);
+            DrawInnerGridLines(deviceCtxHandle, left, top, right, bottom, cellWidth, cellHeight);
         }
         finally
         {
-            PInvoke.SelectObject(hdc, oldPen);
+            // Restore the previous Windows drawing API GDI object and clean up the pen we created.
+            PInvoke.SelectObject(deviceCtxHandle, oldPen);
             PInvoke.DeleteObject(cyanPen);
         }
     }
 
-    /// <summary>Fills the entire client area with the transparency color key, erasing previous content.</summary>
-    private static void FillWithTransparencyColor(HDC hdc, RECT clientRect)
+    private static void DrawLine(HDC deviceCtxHandle, int x1, int y1, int x2, int y2)
     {
-        // BGR 0x010000 is the nearly-black color treated as fully transparent by SetLayeredWindowAttributes.
-        HBRUSH keyBrush = PInvoke.CreateSolidBrush(new COLORREF(0x010000));
-        HGDIOBJ oldBrush = PInvoke.SelectObject(hdc, keyBrush);
-        try
+        // The null parameter expects a pointer, but it is optional.
+        // Need to mark the method as unsafe to pass null here without a pointer safety error.
+        unsafe
         {
-            unsafe
-            {
-                PInvoke.PatBlt(hdc, clientRect.left, clientRect.top,
-                    clientRect.right - clientRect.left,
-                    clientRect.bottom - clientRect.top,
-                    (ROP_CODE)0x00F00021); // PATCOPY
-            }
+            PInvoke.MoveToEx(deviceCtxHandle, x1, y1, null);
         }
-        finally
-        {
-            PInvoke.SelectObject(hdc, oldBrush);
-            PInvoke.DeleteObject(keyBrush);
-        }
+        PInvoke.LineTo(deviceCtxHandle, x2, y2);
     }
 
-    private static unsafe void DrawOuterBorder(HDC hdc, int left, int top, int right, int bottom)
+    private static void DrawOuterBorder(HDC deviceCtxHandle, int left, int top, int right, int bottom)
     {
-        PInvoke.MoveToEx(hdc, left, top, null); PInvoke.LineTo(hdc, right, top);
-        PInvoke.MoveToEx(hdc, right, top, null); PInvoke.LineTo(hdc, right, bottom);
-        PInvoke.MoveToEx(hdc, right, bottom, null); PInvoke.LineTo(hdc, left, bottom);
-        PInvoke.MoveToEx(hdc, left, bottom, null); PInvoke.LineTo(hdc, left, top);
+        DrawLine(deviceCtxHandle, left, top, right, top);
+        DrawLine(deviceCtxHandle, right, top, right, bottom);
+        DrawLine(deviceCtxHandle, right, bottom, left, bottom);
+        DrawLine(deviceCtxHandle, left, bottom, left, top);
     }
 
-    private static unsafe void DrawInnerGridLines(HDC hdc, int left, int top, int right, int bottom, int cellWidth, int cellHeight)
+    private static void DrawInnerGridLines(
+        HDC deviceCtxHandle,
+        int left,
+        int top,
+        int right,
+        int bottom,
+        int cellWidth,
+        int cellHeight)
     {
         // Two vertical dividers at 1/3 and 2/3 of the width.
-        PInvoke.MoveToEx(hdc, left + cellWidth, top, null); PInvoke.LineTo(hdc, left + cellWidth, bottom);
-        PInvoke.MoveToEx(hdc, left + 2 * cellWidth, top, null); PInvoke.LineTo(hdc, left + 2 * cellWidth, bottom);
+        DrawLine(deviceCtxHandle, left + cellWidth, top, left + cellWidth, bottom);
+        DrawLine(deviceCtxHandle, left + 2 * cellWidth, top, left + 2 * cellWidth, bottom);
 
         // Two horizontal dividers at 1/3 and 2/3 of the height.
-        PInvoke.MoveToEx(hdc, left, top + cellHeight, null); PInvoke.LineTo(hdc, right, top + cellHeight);
-        PInvoke.MoveToEx(hdc, left, top + 2 * cellHeight, null); PInvoke.LineTo(hdc, right, top + 2 * cellHeight);
+        DrawLine(deviceCtxHandle, left, top + cellHeight, right, top + cellHeight);
+        DrawLine(deviceCtxHandle, left, top + 2 * cellHeight, right, top + 2 * cellHeight);
     }
 }

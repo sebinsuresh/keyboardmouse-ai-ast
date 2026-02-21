@@ -35,3 +35,7 @@ LineTo
 DestroyWindow
 GetClientRect
 PatBlt
+WM_KEYDOWN
+WM_SYSKEYDOWN
+VIRTUAL_KEY
+WM_PAINT

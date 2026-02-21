@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.Graphics.Gdi;
@@ -8,35 +7,28 @@ namespace keyboardmouse.display;
 
 internal static class DisplayInfo
 {
+    private static readonly List<RECT> s_enumRects = [];
+
     /// <summary>
     /// Enumerates monitor rectangles. Falls back to the virtual screen rect when no monitors are found.
     /// </summary>
-    internal static unsafe RECT[] GetMonitorRects()
+    internal static IList<RECT> GetMonitorRects()
     {
-        var rects = new List<RECT>();
+        if (s_enumRects.Count > 0) return s_enumRects;
 
-        // Use a temporary static holder so the unmanaged callback can add to it.
-        s_enumRects = rects;
-        try
+        unsafe
         {
             PInvoke.EnumDisplayMonitors(default, default, MonitorEnumProc, default);
         }
-        finally
-        {
-            s_enumRects = null;
-        }
 
-        if (rects.Count == 0)
-            rects.Add(GetVirtualScreenRect());
+        if (s_enumRects.Count == 0)
+            s_enumRects.Add(GetVirtualScreenRect());
 
-        return rects.ToArray();
+        return s_enumRects;
     }
 
-    // EnumDisplayMonitors requires an unmanaged delegate, which cannot capture a closure in AOT.
-    // A static field is the only way to pass state into the callback without unsafe trampolines.
-    private static List<RECT>? s_enumRects;
-
     // unsafe is required because the CsWin32-generated delegate signature exposes RECT as a native pointer.
+    // C# requires code that uses pointers to be marked unsafe.
     private static unsafe BOOL MonitorEnumProc(HMONITOR _hMonitor, HDC _hdcMonitor, RECT* lprcMonitor, LPARAM _dwData)
     {
         if (lprcMonitor != null && s_enumRects is not null)
@@ -55,7 +47,13 @@ internal static class DisplayInfo
         int top = PInvoke.GetSystemMetrics(SYSTEM_METRICS_INDEX.SM_YVIRTUALSCREEN);
         int width = PInvoke.GetSystemMetrics(SYSTEM_METRICS_INDEX.SM_CXVIRTUALSCREEN);
         int height = PInvoke.GetSystemMetrics(SYSTEM_METRICS_INDEX.SM_CYVIRTUALSCREEN);
-        return new RECT { left = left, top = top, right = left + width, bottom = top + height };
+
+        return new RECT
+        {
+            left = left,
+            top = top,
+            right = left + width,
+            bottom = top + height,
+        };
     }
 }
-

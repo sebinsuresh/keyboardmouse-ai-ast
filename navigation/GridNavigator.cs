@@ -112,7 +112,7 @@ internal sealed class GridNavigator
     /// </summary>
     private static RECT FindMonitorContaining(int x, int y)
     {
-        RECT[] monitors = DisplayInfo.GetMonitorRects();
+        var monitors = DisplayInfo.GetMonitorRects();
 
         foreach (RECT monitor in monitors)
         {
@@ -121,6 +121,6 @@ internal sealed class GridNavigator
                 return monitor;
         }
 
-        return monitors.Length > 0 ? monitors[0] : DisplayInfo.GetVirtualScreenRect();
+        return monitors[0];
     }
 }
