@@ -4,7 +4,7 @@ using Windows.Win32.Foundation;
 using Windows.Win32.UI.WindowsAndMessaging;
 using Windows.Win32.UI.Input.KeyboardAndMouse;
 
-namespace keyboardmouse;
+namespace keyboardmouse.input;
 
 /// <summary>
 /// Registers a global hotkey and runs a simple message loop, invoking a callback when the hotkey fires.

@@ -1,4 +1,6 @@
-using keyboardmouse.forms;
+using keyboardmouse.display;
+using keyboardmouse.input;
+using keyboardmouse.navigation;
 
 namespace keyboardmouse;
 

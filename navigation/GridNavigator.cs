@@ -1,7 +1,8 @@
+using keyboardmouse.display;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 
-namespace keyboardmouse;
+namespace keyboardmouse.navigation;
 
 /// <summary>
 /// Grid-based mouse navigation over the monitor containing the cursor.
@@ -27,7 +28,7 @@ internal sealed class GridNavigator
 
     internal void Activate()
     {
-        _monitorRect = GetMonitorAtCursor();
+        _monitorRect = GetMonitorAtCursorPosition();
         _currentBounds = _monitorRect;
         _isActive = true;
         OnBoundsChanged?.Invoke(_currentBounds);
@@ -99,18 +100,27 @@ internal sealed class GridNavigator
     private static void MoveToCenterOf(RECT r) =>
         MouseInput.MoveTo((r.left + r.right) / 2, (r.top + r.bottom) / 2);
 
-    private static RECT GetMonitorAtCursor()
+    private static RECT GetMonitorAtCursorPosition()
     {
         PInvoke.GetCursorPos(out System.Drawing.Point cursor);
+        return FindMonitorContaining(cursor.X, cursor.Y);
+    }
 
-        RECT[] rects = DisplayInfo.GetMonitorRects();
-        foreach (RECT r in rects)
+    /// <summary>
+    /// Returns the monitor rectangle that contains the given point.
+    /// Falls back to the first known monitor, or the virtual screen if no monitors are found.
+    /// </summary>
+    private static RECT FindMonitorContaining(int x, int y)
+    {
+        RECT[] monitors = DisplayInfo.GetMonitorRects();
+
+        foreach (RECT monitor in monitors)
         {
-            if (cursor.X >= r.left && cursor.X < r.right &&
-                cursor.Y >= r.top && cursor.Y < r.bottom)
-                return r;
+            if (x >= monitor.left && x < monitor.right &&
+                y >= monitor.top && y < monitor.bottom)
+                return monitor;
         }
 
-        return rects.Length > 0 ? rects[0] : DisplayInfo.GetVirtualScreenRect();
+        return monitors.Length > 0 ? monitors[0] : DisplayInfo.GetVirtualScreenRect();
     }
 }

@@ -1,9 +1,10 @@
 using System;
 using System.Runtime.InteropServices;
+using keyboardmouse.display;
 using Windows.Win32;
 using Windows.Win32.UI.Input.KeyboardAndMouse;
 
-namespace keyboardmouse;
+namespace keyboardmouse.navigation;
 
 internal static class MouseInput
 {
@@ -16,18 +17,18 @@ internal static class MouseInput
     /// </summary>
     internal static void MoveTo(int x, int y)
     {
-        var vr = DisplayInfo.GetVirtualScreenRect();
+        var virtualScreen = DisplayInfo.GetVirtualScreenRect();
         // Guard against a degenerate virtual screen (e.g., no monitor reported) to prevent division by zero.
-        int vsWidth = Math.Max(1, vr.right - vr.left);
-        int vsHeight = Math.Max(1, vr.bottom - vr.top);
+        int virtualScreenWidth = Math.Max(1, virtualScreen.right - virtualScreen.left);
+        int virtualScreenHeight = Math.Max(1, virtualScreen.bottom - virtualScreen.top);
 
-        int normX = (int)Math.Round((double)(x - vr.left) * 65535.0 / vsWidth);
-        int normY = (int)Math.Round((double)(y - vr.top) * 65535.0 / vsHeight);
+        int normalizedX = (int)Math.Round((double)(x - virtualScreen.left) * 65535.0 / virtualScreenWidth);
+        int normalizedY = (int)Math.Round((double)(y - virtualScreen.top) * 65535.0 / virtualScreenHeight);
 
         INPUT input = default;
         input.type = INPUT_TYPE.INPUT_MOUSE;
-        input.Anonymous.mi.dx = normX;
-        input.Anonymous.mi.dy = normY;
+        input.Anonymous.mi.dx = normalizedX;
+        input.Anonymous.mi.dy = normalizedY;
         input.Anonymous.mi.dwFlags =
             MOUSE_EVENT_FLAGS.MOUSEEVENTF_MOVE |
             MOUSE_EVENT_FLAGS.MOUSEEVENTF_ABSOLUTE |

@@ -1,10 +1,11 @@
 using System;
+using keyboardmouse.display;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.Graphics.Gdi;
 using Windows.Win32.UI.WindowsAndMessaging;
 
-namespace keyboardmouse.forms;
+namespace keyboardmouse.display;
 
 /// <summary>
 /// Topmost click-through layered overlay window displaying a cyan 3×3 grid.
@@ -146,32 +147,12 @@ internal sealed class OverlayWindow
 
             try
             {
-                // Fill entire window with color-key color to establish transparency
-                // and erase any previous content.
-                RECT clientRect = default;
-                PInvoke.GetClientRect(hwnd, out clientRect);
-                HBRUSH keyBrush = PInvoke.CreateSolidBrush(new COLORREF(0x010000));
-                HGDIOBJ oldBrush = PInvoke.SelectObject(hdc, keyBrush);
-                try
-                {
-                    PInvoke.PatBlt(hdc, clientRect.left, clientRect.top,
-                        clientRect.right - clientRect.left,
-                        clientRect.bottom - clientRect.top,
-                        (ROP_CODE)0x00F00021);
-                }
-                finally
-                {
-                    PInvoke.SelectObject(hdc, oldBrush);
-                    PInvoke.DeleteObject(keyBrush);
-                }
+                PInvoke.GetClientRect(hwnd, out RECT clientRect);
+                FillWithTransparencyColor(hdc, clientRect);
 
-                if (_currentBounds.left == 0 && _currentBounds.right == 0 &&
-                    _currentBounds.top == 0 && _currentBounds.bottom == 0)
-                {
-                    return default(LRESULT);
-                }
-
-                PaintGrid(hdc);
+                // Only draw the grid when a valid region has been set.
+                if (_currentBounds.right > _currentBounds.left && _currentBounds.bottom > _currentBounds.top)
+                    PaintGrid(hdc);
             }
             finally
             {
@@ -190,57 +171,25 @@ internal sealed class OverlayWindow
 
     private void PaintGrid(HDC hdc)
     {
-        // Create a cyan pen (RGB 0, 255, 255 in Windows BGR format: 0xFFFF00).
+        // Create a cyan pen (RGB 0,255,255 — Windows BGR format: 0xFFFF00).
         HPEN cyanPen = PInvoke.CreatePen(PEN_STYLE.PS_SOLID, 2, new COLORREF(0xFFFF00));
         HGDIOBJ oldPen = PInvoke.SelectObject(hdc, cyanPen);
 
         try
         {
-            // Convert screen coordinates to client coordinates.
-            int clientLeft = _currentBounds.left - _virtualOriginX;
-            int clientTop = _currentBounds.top - _virtualOriginY;
-            int clientRight = _currentBounds.right - _virtualOriginX;
-            int clientBottom = _currentBounds.bottom - _virtualOriginY;
+            // Convert from virtual-screen coordinates to window-client coordinates.
+            int left = _currentBounds.left - _virtualOriginX;
+            int top = _currentBounds.top - _virtualOriginY;
+            int right = _currentBounds.right - _virtualOriginX;
+            int bottom = _currentBounds.bottom - _virtualOriginY;
 
-            int width = clientRight - clientLeft;
-            int height = clientBottom - clientTop;
-            int cellW = width / 3;
-            int cellH = height / 3;
+            int cellWidth = (right - left) / 3;
+            int cellHeight = (bottom - top) / 3;
 
             unsafe
             {
-                // Outer border (4 lines).
-                PInvoke.MoveToEx(hdc, clientLeft, clientTop, null);
-                PInvoke.LineTo(hdc, clientRight, clientTop);
-
-                PInvoke.MoveToEx(hdc, clientRight, clientTop, null);
-                PInvoke.LineTo(hdc, clientRight, clientBottom);
-
-                PInvoke.MoveToEx(hdc, clientRight, clientBottom, null);
-                PInvoke.LineTo(hdc, clientLeft, clientBottom);
-
-                PInvoke.MoveToEx(hdc, clientLeft, clientBottom, null);
-                PInvoke.LineTo(hdc, clientLeft, clientTop);
-
-                // Vertical dividers.
-                int x1 = clientLeft + cellW;
-                int x2 = clientLeft + 2 * cellW;
-
-                PInvoke.MoveToEx(hdc, x1, clientTop, null);
-                PInvoke.LineTo(hdc, x1, clientBottom);
-
-                PInvoke.MoveToEx(hdc, x2, clientTop, null);
-                PInvoke.LineTo(hdc, x2, clientBottom);
-
-                // Horizontal dividers.
-                int y1 = clientTop + cellH;
-                int y2 = clientTop + 2 * cellH;
-
-                PInvoke.MoveToEx(hdc, clientLeft, y1, null);
-                PInvoke.LineTo(hdc, clientRight, y1);
-
-                PInvoke.MoveToEx(hdc, clientLeft, y2, null);
-                PInvoke.LineTo(hdc, clientRight, y2);
+                DrawOuterBorder(hdc, left, top, right, bottom);
+                DrawInnerGridLines(hdc, left, top, right, bottom, cellWidth, cellHeight);
             }
         }
         finally
@@ -248,5 +197,47 @@ internal sealed class OverlayWindow
             PInvoke.SelectObject(hdc, oldPen);
             PInvoke.DeleteObject(cyanPen);
         }
+    }
+
+    /// <summary>Fills the entire client area with the transparency color key, erasing previous content.</summary>
+    private static void FillWithTransparencyColor(HDC hdc, RECT clientRect)
+    {
+        // BGR 0x010000 is the nearly-black color treated as fully transparent by SetLayeredWindowAttributes.
+        HBRUSH keyBrush = PInvoke.CreateSolidBrush(new COLORREF(0x010000));
+        HGDIOBJ oldBrush = PInvoke.SelectObject(hdc, keyBrush);
+        try
+        {
+            unsafe
+            {
+                PInvoke.PatBlt(hdc, clientRect.left, clientRect.top,
+                    clientRect.right - clientRect.left,
+                    clientRect.bottom - clientRect.top,
+                    (ROP_CODE)0x00F00021); // PATCOPY
+            }
+        }
+        finally
+        {
+            PInvoke.SelectObject(hdc, oldBrush);
+            PInvoke.DeleteObject(keyBrush);
+        }
+    }
+
+    private static unsafe void DrawOuterBorder(HDC hdc, int left, int top, int right, int bottom)
+    {
+        PInvoke.MoveToEx(hdc, left, top, null); PInvoke.LineTo(hdc, right, top);
+        PInvoke.MoveToEx(hdc, right, top, null); PInvoke.LineTo(hdc, right, bottom);
+        PInvoke.MoveToEx(hdc, right, bottom, null); PInvoke.LineTo(hdc, left, bottom);
+        PInvoke.MoveToEx(hdc, left, bottom, null); PInvoke.LineTo(hdc, left, top);
+    }
+
+    private static unsafe void DrawInnerGridLines(HDC hdc, int left, int top, int right, int bottom, int cellWidth, int cellHeight)
+    {
+        // Two vertical dividers at 1/3 and 2/3 of the width.
+        PInvoke.MoveToEx(hdc, left + cellWidth, top, null); PInvoke.LineTo(hdc, left + cellWidth, bottom);
+        PInvoke.MoveToEx(hdc, left + 2 * cellWidth, top, null); PInvoke.LineTo(hdc, left + 2 * cellWidth, bottom);
+
+        // Two horizontal dividers at 1/3 and 2/3 of the height.
+        PInvoke.MoveToEx(hdc, left, top + cellHeight, null); PInvoke.LineTo(hdc, right, top + cellHeight);
+        PInvoke.MoveToEx(hdc, left, top + 2 * cellHeight, null); PInvoke.LineTo(hdc, right, top + 2 * cellHeight);
     }
 }

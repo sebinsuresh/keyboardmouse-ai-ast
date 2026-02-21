@@ -4,7 +4,7 @@ using Windows.Win32.Foundation;
 using Windows.Win32.UI.Input.KeyboardAndMouse;
 using Windows.Win32.UI.WindowsAndMessaging;
 
-namespace keyboardmouse;
+namespace keyboardmouse.input;
 
 /// <summary>
 /// Installs a low-level keyboard hook (WH_KEYBOARD_LL) that intercepts key-down events.

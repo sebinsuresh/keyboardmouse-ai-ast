@@ -4,7 +4,7 @@ using Windows.Win32.Foundation;
 using Windows.Win32.Graphics.Gdi;
 using Windows.Win32.UI.WindowsAndMessaging;
 
-namespace keyboardmouse;
+namespace keyboardmouse.display;
 
 internal static class DisplayInfo
 {
