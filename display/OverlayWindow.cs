@@ -2,6 +2,7 @@ using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.Graphics.Gdi;
 using Windows.Win32.UI.WindowsAndMessaging;
+using keyboardmouse.input;
 
 namespace keyboardmouse.display;
 
@@ -200,6 +201,7 @@ internal sealed class OverlayWindow
 
             DrawOuterBorder(deviceCtxHandle, left, top, right, bottom);
             DrawInnerGridLines(deviceCtxHandle, left, top, right, bottom, cellWidth, cellHeight);
+            DrawCellLabels(deviceCtxHandle, left, top, cellWidth, cellHeight);
         }
         finally
         {
@@ -244,5 +246,48 @@ internal sealed class OverlayWindow
         // Two horizontal dividers at 1/3 and 2/3 of the height.
         DrawLine(deviceCtxHandle, left, top + cellHeight, right, top + cellHeight);
         DrawLine(deviceCtxHandle, left, top + 2 * cellHeight, right, top + 2 * cellHeight);
+    }
+
+    /// <summary>Draw key labels in the top-left of each cell.</summary>
+    private static void DrawCellLabels(HDC deviceCtxHandle, int left, int top, int cellWidth, int cellHeight)
+    {
+        const int padding = 6;
+        SetBackgroundTransparent(deviceCtxHandle);
+
+        for (int row = 0; row < 3; row++)
+        {
+            for (int col = 0; col < 3; col++)
+            {
+                if (!GridInputHandler.CellLabels.TryGetValue((col, row), out var label))
+                {
+                    continue;
+                }
+
+                int cellLeft = left + col * cellWidth;
+                int cellTop = top + row * cellHeight;
+                int x = cellLeft + padding;
+                int y = cellTop + padding;
+
+                DrawOutlinedText(deviceCtxHandle, x, y, label);
+            }
+        }
+    }
+
+    private static void SetBackgroundTransparent(HDC hdc)
+    {
+        PInvoke.SetBkMode(hdc, BACKGROUND_MODE.TRANSPARENT);
+    }
+
+    private static void DrawOutlinedText(HDC hdc, int x, int y, string text)
+    {
+        // Draw a simple black outline by black text in 4 directions.
+        PInvoke.SetTextColor(hdc, new COLORREF(0x000000));
+        PInvoke.TextOut(hdc, x - 1, y, text, text.Length);
+        PInvoke.TextOut(hdc, x + 1, y, text, text.Length);
+        PInvoke.TextOut(hdc, x, y - 1, text, text.Length);
+        PInvoke.TextOut(hdc, x, y + 1, text, text.Length);
+
+        PInvoke.SetTextColor(hdc, new COLORREF(0xFFFFFF));
+        PInvoke.TextOut(hdc, x, y, text, text.Length);
     }
 }

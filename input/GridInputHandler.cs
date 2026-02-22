@@ -33,6 +33,22 @@ internal sealed class GridInputHandler : IDisposable
         [0xBE] = (2, 2), // . — bot-right
     };
 
+    /// <summary>
+    /// Public, extendable mapping from grid cell (col,row) to the display label shown in the overlay.
+    /// </summary>
+    public static readonly Dictionary<(int Col, int Row), string> CellLabels = new()
+    {
+        [(0, 0)] = "U",
+        [(1, 0)] = "I",
+        [(2, 0)] = "O",
+        [(0, 1)] = "J",
+        [(1, 1)] = "K",
+        [(2, 1)] = "L",
+        [(0, 2)] = "M",
+        [(1, 2)] = ",",
+        [(2, 2)] = ".",
+    };
+
     // Callback invoked when a tap sequence resolves: (col, row, tapCount)
     private readonly Action<int, int, int> _onCommand;
 
