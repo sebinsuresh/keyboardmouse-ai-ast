@@ -26,6 +26,7 @@ internal sealed class OverlayWindow
     // Set the color key for transparency: RGB(0, 0, 1) — the nearly-black pixel
     private const int TransparentColor = 0x010000; // BGR format
     private const ROP_CODE ReplaceWPatternRasterOpCode = (ROP_CODE)0x00F00021; // PATCOPY
+    private const byte alpha = 128; // ~50%
 
     // Need unsafe for 
     internal static unsafe void RegisterWindowClass()
@@ -83,8 +84,8 @@ internal sealed class OverlayWindow
         PInvoke.SetLayeredWindowAttributes(
             _windowHandle,
             new COLORREF(TransparentColor),
-            255,
-            LAYERED_WINDOW_ATTRIBUTES_FLAGS.LWA_COLORKEY
+            alpha,
+            LAYERED_WINDOW_ATTRIBUTES_FLAGS.LWA_COLORKEY | LAYERED_WINDOW_ATTRIBUTES_FLAGS.LWA_ALPHA
         );
     }
 
