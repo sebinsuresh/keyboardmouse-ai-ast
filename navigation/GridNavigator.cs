@@ -1,4 +1,5 @@
 using keyboardmouse.display;
+using keyboardmouse.input;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 
@@ -22,6 +23,7 @@ internal sealed class GridNavigator
     private bool _isActive;
     private RECT _monitorRect;   // full monitor rect captured at activation
     private RECT _currentBounds; // current sub-divided region
+    private readonly Stack<RECT> _history = new(); // navigation history for back navigation
 
     internal bool IsActive => _isActive;
     internal Action<RECT>? OnBoundsChanged { get; set; }
@@ -30,6 +32,7 @@ internal sealed class GridNavigator
     {
         _monitorRect = GetMonitorAtCursorPosition();
         _currentBounds = _monitorRect;
+        _history.Clear();
         _isActive = true;
         OnBoundsChanged?.Invoke(_currentBounds);
     }
@@ -39,21 +42,29 @@ internal sealed class GridNavigator
         _isActive = false;
         _monitorRect = default;
         _currentBounds = default;
+        _history.Clear();
         OnBoundsChanged?.Invoke(default);
     }
 
     /// <summary>Acts on a resolved command from <see cref="GridInputHandler"/>.</summary>
-    internal void Execute(int col, int row, int taps)
+    internal void Execute(GridCommand command)
     {
         if (!_isActive) return;
 
-        if (taps >= 3)
-            JumpToHalf(col, row);
-        else
-            DrillDown(col, row);
+        switch (command)
+        {
+            case DrillCommand drill:
+                DrillDown(drill.Col, drill.Row);
+                break;
+            case ResetCommand reset:
+                _history.Clear();
+                JumpToHalf(reset.Col, reset.Row);
+                break;
+            case BackCommand:
+                GoBack();
+                break;
+        }
     }
-
-    // -------------------------------------------------------------------------
 
     private void DrillDown(int col, int row)
     {
@@ -61,6 +72,8 @@ internal sealed class GridNavigator
         int h = _currentBounds.bottom - _currentBounds.top;
 
         if (w / GridDivisions < MinCellPx || h / GridDivisions < MinCellPx) return;
+
+        _history.Push(_currentBounds);
 
         int cellW = w / GridDivisions;
         int cellH = h / GridDivisions;
@@ -73,6 +86,16 @@ internal sealed class GridNavigator
             bottom = _currentBounds.top + (row + 1) * cellH,
         };
 
+        MoveToCenterOf(_currentBounds);
+        OnBoundsChanged?.Invoke(_currentBounds);
+    }
+
+    /// <summary>Navigate back to the previous grid level. No-op if history is empty.</summary>
+    private void GoBack()
+    {
+        if (_history.Count == 0) return;
+
+        _currentBounds = _history.Pop();
         MoveToCenterOf(_currentBounds);
         OnBoundsChanged?.Invoke(_currentBounds);
     }

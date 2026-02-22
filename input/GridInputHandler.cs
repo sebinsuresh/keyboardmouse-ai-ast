@@ -7,18 +7,22 @@ namespace keyboardmouse.input;
 /// <summary>
 /// Translates key presses into resolved navigation commands and fires a callback.
 ///
-/// Key layout (mirrors numpad positions):
+/// Grid key layout (mirrors numpad positions):
 ///   u  i  o      top-left    top-center    top-right
 ///   j  k  l      mid-left    center        mid-right
 ///   m  ,  .      bot-left    bot-center    bot-right
 ///
 /// Tap rules:
 ///   Single tap → drill down one level into the current region
-///   Triple tap → jump to the corresponding monitor half and reset the region
+///   Triple tap → reset history and jump to the corresponding monitor half
+///
+/// Back key:
+///   h → navigate to the previous grid level (no tap sequencing)
 /// </summary>
 internal sealed class GridInputHandler : IDisposable
 {
     private const int TapWindowMs = 300;
+    private const int VK_H = 0x48;
 
     private static readonly Dictionary<int, (int Col, int Row)> s_keyMap = new()
     {
@@ -49,8 +53,8 @@ internal sealed class GridInputHandler : IDisposable
         [(2, 2)] = ".",
     };
 
-    // Callback invoked when a tap sequence resolves: (col, row, tapCount)
-    private readonly Action<int, int, int> _onCommand;
+    // Callback invoked when a command resolves
+    private readonly Action<GridCommand> _onCommand;
 
     private int _tapCount;
     private int _pendingCol = -1;
@@ -58,7 +62,7 @@ internal sealed class GridInputHandler : IDisposable
     private long _lastTapTime;
     private Timer? _tapTimer;
 
-    internal GridInputHandler(Action<int, int, int> onCommand)
+    internal GridInputHandler(Action<GridCommand> onCommand)
     {
         _onCommand = onCommand;
     }
@@ -69,6 +73,13 @@ internal sealed class GridInputHandler : IDisposable
     /// </summary>
     internal bool HandleKey(int virtualKey)
     {
+        // H key for back navigation — fire immediately, no tap sequencing
+        if (virtualKey == VK_H)
+        {
+            _onCommand(new BackCommand());
+            return true;
+        }
+
         if (!s_keyMap.TryGetValue(virtualKey, out var cell)) return false;
         RecordTap(cell.Col, cell.Row);
         return true;
@@ -84,8 +95,6 @@ internal sealed class GridInputHandler : IDisposable
     }
 
     public void Dispose() => Reset();
-
-    // -------------------------------------------------------------------------
 
     private void RecordTap(int col, int row)
     {
@@ -126,12 +135,12 @@ internal sealed class GridInputHandler : IDisposable
         _lastTapTime = now;
     }
 
-    /// <summary>Immediately emits the triple-tap command and clears the pending sequence.</summary>
+    /// <summary>Immediately emits the reset/jump command and clears the pending sequence.</summary>
     private void CommitTripleTap()
     {
         _tapTimer?.Dispose();
         _tapTimer = null;
-        Emit(_pendingCol, _pendingRow, 3);
+        Emit(_pendingCol, _pendingRow, _tapCount);
         ClearPending();
     }
 
@@ -180,5 +189,11 @@ internal sealed class GridInputHandler : IDisposable
         _pendingRow = -1;
     }
 
-    private void Emit(int col, int row, int taps) => _onCommand(col, row, taps);
+    private void Emit(int col, int row, int taps)
+    {
+        GridCommand cmd = taps >= 3
+            ? new ResetCommand(col, row)
+            : new DrillCommand(col, row);
+        _onCommand(cmd);
+    }
 }
