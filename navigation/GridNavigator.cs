@@ -120,8 +120,16 @@ internal sealed class GridNavigator
         OnBoundsChanged?.Invoke(_currentBounds);
     }
 
-    private static void MoveToCenterOf(RECT r) =>
-        MouseInput.MoveTo((r.left + r.right) / 2, (r.top + r.bottom) / 2);
+    private static void MoveToCenterOf(RECT r)
+    {
+        int targetX = (r.left + r.right) / 2;
+        int targetY = (r.top + r.bottom) / 2;
+
+        // capture previous cursor position, perform the instant move, then show a one-shot trail line
+        PInvoke.GetCursorPos(out System.Drawing.Point prev);
+        MouseInput.MoveTo(targetX, targetY);
+        TrailOverlay.Instance?.ShowLine(prev, new System.Drawing.Point(targetX, targetY));
+    }
 
     private static RECT GetMonitorAtCursorPosition()
     {

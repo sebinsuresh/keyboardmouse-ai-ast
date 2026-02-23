@@ -13,13 +13,19 @@ static class Program
     static void Main()
     {
         OverlayWindow.RegisterWindowClass();
+        TrailOverlay.RegisterWindowClass();
 
         var navigator = new GridNavigator();
         var overlay = new OverlayWindow();
+        var trail = new TrailOverlay();
 
         try
         {
             overlay.Create();
+            // Create and show the simple trail overlay used for one-shot white lines.
+            trail.Create();
+            trail.Show();
+
             navigator.OnBoundsChanged = overlay.UpdateBounds;
 
             using var input = new GridInputHandler(navigator.Execute);
@@ -45,6 +51,7 @@ static class Program
         finally
         {
             overlay.Destroy();
+            trail.Dispose();
         }
     }
 }
