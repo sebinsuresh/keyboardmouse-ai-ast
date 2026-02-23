@@ -5,6 +5,7 @@
 - Keep methods short and focused on a single concern.
 - No tangled multi-concern logic in one method or class — separate via methods or classes.
 - Clean, readable code over verbose code.
+- No Winform or WPF code. Use Win32 APIs using CsWin32 (see below).
 
 ## unsafe Code
 - Keep `unsafe` blocks as small as possible — wrap only the pointer dereference, not the surrounding logic.
