@@ -1,24 +1,22 @@
 namespace keyboardmouse.input;
 
 /// <summary>
-/// Translates key presses into resolved navigation commands and fires a callback.
+/// Translates key presses and modifiers into navigation commands and fires a callback.
 ///
 /// Grid key layout (mirrors numpad positions):
 ///   u  i  o      top-left    top-center    top-right
 ///   j  k  l      mid-left    center        mid-right
 ///   m  ,  .      bot-left    bot-center    bot-right
 ///
-/// Tap rules:
-///   Single tap → drill down one level into the current region
-///   Triple tap → reset history and jump to the corresponding monitor half
+/// Navigation rules:
+///   Grid key (unmodified) → drill down one level into the grid
+///   Shift + grid key → reset history and jump to the corresponding screen region
 ///
 /// Back key:
-///   h → navigate to the previous grid level (no tap sequencing)
+///   h → navigate to the previous grid level (modifiers ignored)
 /// </summary>
 internal sealed class GridInputHandler : IDisposable
 {
-    private const int TapDisambiguationWindowMs = 300;
-    private readonly SequenceDetector<InputAction, GridCommand> _sequenceDetector;
     private readonly Action<GridCommand> _onCommand;
 
     /// <summary>
@@ -40,35 +38,21 @@ internal sealed class GridInputHandler : IDisposable
     internal GridInputHandler(Action<GridCommand> onCommand)
     {
         _onCommand = onCommand;
-
-        var resolver = new GridSequenceResolver();
-        _sequenceDetector = new(resolver, TapDisambiguationWindowMs);
-        _sequenceDetector.SequenceCompleted += OnSequenceCompleted;
     }
 
     /// <summary>
-    /// Handles a completed input sequence by emitting the resolved command.
-    /// </summary>
-    private void OnSequenceCompleted(object? sender, SequenceCompletedEventArgs<InputAction, GridCommand> e)
-    {
-        _onCommand(e.Action);
-    }
-
-    /// <summary>
-    /// Processes a key press. Returns <c>true</c> if the key is a recognized navigation key
+    /// Processes a key press with modifiers. Returns <c>true</c> if the key is a recognized navigation key
     /// (caller should swallow it); <c>false</c> otherwise.
     /// </summary>
-    internal bool HandleKey(int virtualKey)
+    internal bool HandleKey(int virtualKey, ModifierKeys modifiers)
     {
-        var action = InputTranslator.TryTranslateKey(virtualKey);
-        if (action == null) return false;
+        var command = InputTranslator.TryGetCommand(virtualKey, modifiers);
+        if (command == null) return false;
 
-        _sequenceDetector.RegisterInput(action.Value);
+        _onCommand(command);
         return true;
     }
 
-    /// <summary>Clears any pending tap sequence without executing it.</summary>
-    internal void Reset() => _sequenceDetector.Reset();
-
-    public void Dispose() => _sequenceDetector.Dispose();
+    /// <summary>Dispose (no-op as timer is now removed).</summary>
+    public void Dispose() { }
 }

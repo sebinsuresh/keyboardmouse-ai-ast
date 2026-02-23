@@ -1,6 +1,7 @@
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.UI.WindowsAndMessaging;
+using Windows.Win32.UI.Input.KeyboardAndMouse;
 
 namespace keyboardmouse.input;
 
@@ -19,7 +20,7 @@ internal sealed class KeyboardHook : IDisposable
 
     private static KeyboardHook? instance;
     private UnhookWindowsHookExSafeHandle? _keyboardHookHandle;
-    private Func<int, bool>? _keyboardEventHandler;
+    private Func<int, ModifierKeys, bool>? _keyboardEventHandler;
 
     private KeyboardHook() { }
 
@@ -35,7 +36,7 @@ internal sealed class KeyboardHook : IDisposable
     /// Installs the hook and starts routing key-down events to <paramref name="handler"/>.
     /// Calling this when the hook is already installed is a no-op.
     /// </summary>
-    public void Install(Func<int, bool> handler)
+    public void Install(Func<int, ModifierKeys, bool> handler)
     {
         if (_keyboardHookHandle is { IsInvalid: false }) return;
 
@@ -60,12 +61,27 @@ internal sealed class KeyboardHook : IDisposable
             {
                 var kbd = (KBDLLHOOKSTRUCT*)lParam.Value;
 
-                if (
-                    kbd != default &&
-                    kbd->vkCode != 0 &&
-                    instance._keyboardEventHandler.Invoke((int)kbd->vkCode) == true)
+                if (kbd != default && kbd->vkCode != 0)
                 {
-                    return (LRESULT)1;
+                    // Skip modifier keys themselves — they don't trigger commands
+                    if ((int)kbd->vkCode is 0x10 or 0x11 or 0x12) // VK_SHIFT, VK_CONTROL, VK_MENU
+                    {
+                        return PInvoke.CallNextHookEx(default, nCode, wParam, lParam);
+                    }
+
+                    // Compute active modifiers
+                    var modifiers = ModifierKeys.None;
+                    if ((PInvoke.GetAsyncKeyState(0x10) & 0x8000) != 0)
+                        modifiers |= ModifierKeys.Shift;
+                    if ((PInvoke.GetAsyncKeyState(0x11) & 0x8000) != 0)
+                        modifiers |= ModifierKeys.Control;
+                    if ((PInvoke.GetAsyncKeyState(0x12) & 0x8000) != 0)
+                        modifiers |= ModifierKeys.Alt;
+
+                    if (instance._keyboardEventHandler.Invoke((int)kbd->vkCode, modifiers) == true)
+                    {
+                        return (LRESULT)1;
+                    }
                 }
             }
         }

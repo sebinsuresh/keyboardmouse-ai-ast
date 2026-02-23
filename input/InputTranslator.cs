@@ -1,8 +1,9 @@
 namespace keyboardmouse.input;
 
 /// <summary>
-/// Translates Windows virtual key codes to semantic input actions.
-/// Separates Windows API concerns from sequence detection logic.
+/// Translates Windows virtual key codes and modifiers to grid commands.
+/// Maps keys to drill commands (navigate grid), shift+keys to reset commands (jump to screen region),
+/// and h to back command (exit to parent grid).
 /// </summary>
 internal static class InputTranslator
 {
@@ -17,26 +18,41 @@ internal static class InputTranslator
     private const int VK_COMMA = 0xBC;  // Bot-center (,)
     private const int VK_PERIOD = 0xBE; // Bot-right (.)
 
-    private static readonly Dictionary<int, InputAction> s_keyToActionMap = new()
+    private static readonly Dictionary<int, (int col, int row)> s_keyToGridPosition = new()
     {
-        [VK_H] = InputAction.Back,
-        [VK_U] = InputAction.GridTopLeft,
-        [VK_I] = InputAction.GridTopCenter,
-        [VK_O] = InputAction.GridTopRight,
-        [VK_J] = InputAction.GridMiddleLeft,
-        [VK_K] = InputAction.GridCenter,
-        [VK_L] = InputAction.GridMiddleRight,
-        [VK_M] = InputAction.GridBottomLeft,
-        [VK_COMMA] = InputAction.GridBottomCenter,
-        [VK_PERIOD] = InputAction.GridBottomRight,
+        [VK_U] = (0, 0),       // Top-left
+        [VK_I] = (1, 0),       // Top-center
+        [VK_O] = (2, 0),       // Top-right
+        [VK_J] = (0, 1),       // Mid-left
+        [VK_K] = (1, 1),       // Center
+        [VK_L] = (2, 1),       // Mid-right
+        [VK_M] = (0, 2),       // Bot-left
+        [VK_COMMA] = (1, 2),   // Bot-center
+        [VK_PERIOD] = (2, 2),  // Bot-right
     };
 
     /// <summary>
-    /// Attempts to translate a Windows virtual key code to a semantic input action.
-    /// Returns null if the key is not a recognized navigation key.
+    /// Translates a virtual key code and modifiers to a grid command.
+    /// H key → BackCommand (modifiers ignored)
+    /// Grid key without shift → DrillCommand (navigate into grid section)
+    /// Grid key with shift → ResetCommand (jump to screen region and reset)
+    /// Returns null if the key is not recognized.
     /// </summary>
-    public static InputAction? TryTranslateKey(int virtualKey)
+    public static GridCommand? TryGetCommand(int virtualKey, ModifierKeys modifiers)
     {
-        return s_keyToActionMap.TryGetValue(virtualKey, out var action) ? action : null;
+        if (virtualKey == VK_H)
+        {
+            return new BackCommand();
+        }
+
+        if (s_keyToGridPosition.TryGetValue(virtualKey, out var pos))
+        {
+            return modifiers.HasFlag(ModifierKeys.Shift)
+                ? new ResetCommand(pos.col, pos.row)
+                : new DrillCommand(pos.col, pos.row);
+        }
+
+        return null;
     }
 }
+

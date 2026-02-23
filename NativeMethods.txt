@@ -43,3 +43,4 @@ SetBkMode
 SetTextColor
 TextOut
 ROP_CODE
+GetAsyncKeyState

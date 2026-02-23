@@ -31,14 +31,13 @@ static class Program
                 if (navigator.IsActive)
                 {
                     navigator.Deactivate();
-                    input.Reset();
                     hook.Uninstall();
                     overlay.Hide();
                 }
                 else
                 {
                     navigator.Activate();
-                    hook.Install(input.HandleKey);
+                    hook.Install((vk, mods) => input.HandleKey(vk, mods));
                     overlay.Show();
                 }
             });
