@@ -42,3 +42,4 @@ WM_PAINT
 SetBkMode
 SetTextColor
 TextOut
+ROP_CODE
