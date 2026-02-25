@@ -5,7 +5,7 @@
     - left and right
     - click and hold should be possible - don't send double click when holding key
 - Make trail line animated and fade
-
+- Be able to save spots on monitor and keybinds to jump to them
 - Draw diagram of current architecture 
 - Refactor code
     - separate platform and app logic completely
