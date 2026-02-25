@@ -20,6 +20,10 @@ internal sealed class GridOverlay
     private RECT _currentBounds = default;
     private int _virtualOriginX;
     private int _virtualOriginY;
+    private GridLineCache? _lineCache;
+
+    /// <summary>Maximum number of distinct grid sizes to cache. 0 means unlimited.</summary>
+    public int CacheDepths { get; set; } = 0;
 
     private const WINDOW_EX_STYLE OverlayExStyle =
         WINDOW_EX_STYLE.WS_EX_LAYERED |
@@ -30,7 +34,7 @@ internal sealed class GridOverlay
     // Set the color key for transparency: RGB(0, 0, 1) — the nearly-black pixel
     private const int TransparentColor = 0x010000; // BGR format
     private const ROP_CODE ReplaceWPatternRasterOpCode = (ROP_CODE)0x00F00021; // PATCOPY
-    private const byte alpha = 100; // range: 1 - 255
+    private const byte alpha = 140; // range: 1 - 255
 
     // Need unsafe for 
     internal static unsafe void RegisterWindowClass()
@@ -91,6 +95,8 @@ internal sealed class GridOverlay
             alpha,
             LAYERED_WINDOW_ATTRIBUTES_FLAGS.LWA_COLORKEY | LAYERED_WINDOW_ATTRIBUTES_FLAGS.LWA_ALPHA
         );
+
+        _lineCache = new GridLineCache(CacheDepths);
     }
 
     public void Show()
@@ -125,6 +131,8 @@ internal sealed class GridOverlay
             _windowHandle = HWND.Null;
         }
 
+        _lineCache?.Dispose();
+        _lineCache = null;
         _fontHandle?.Dispose();
         _fontHandle = null;
         instance = null;
@@ -203,70 +211,75 @@ internal sealed class GridOverlay
         }
     }
 
-    private void PaintGrid(HDC deviceCtxHandle)
+    private void PaintGrid(HDC hdc)
     {
-        // Create a cyan pen (RGB 0,255,255 — Windows BGR format: 0xFFFF00).
-        HPEN cyanPen = PInvoke.CreatePen(PEN_STYLE.PS_SOLID, 1, new COLORREF(0xFFFF00));
-        HGDIOBJ oldPen = PInvoke.SelectObject(deviceCtxHandle, cyanPen);
+        // Convert from virtual-screen coordinates to window-client coordinates.
+        int left = _currentBounds.left - _virtualOriginX;
+        int top = _currentBounds.top - _virtualOriginY;
+        int right = _currentBounds.right - _virtualOriginX;
+        int bottom = _currentBounds.bottom - _virtualOriginY;
+
+        int cellWidth = (right - left) / 3;
+        int cellHeight = (bottom - top) / 3;
+
+        PaintGridLines(hdc, left, top, cellWidth, cellHeight);
+        DrawCellLabels(hdc, left, top, cellWidth, cellHeight);
+    }
+
+    /// <summary>Paints grid lines using the cache: blits from cache on hit, renders and stores on miss.</summary>
+    private void PaintGridLines(HDC hdc, int left, int top, int cellWidth, int cellHeight)
+    {
+        int w = cellWidth * 3;
+        int h = cellHeight * 3;
+        var key = (w, h);
+
+        if (!_lineCache!.TryGet(key, out HBITMAP bitmap))
+        {
+            bitmap = RenderLinesToBitmap(hdc, w, h, cellWidth, cellHeight);
+            _lineCache.Store(key, bitmap);
+        }
+
+        // Blit w+1 × h+1: the extra pixel accommodates the border drawn at coordinates (w, *) and (*, h).
+        BlitBitmap(hdc, bitmap, left, top, w + 1, h + 1);
+    }
+
+    /// <summary>Renders grid lines into an off-screen bitmap. The returned HBITMAP is owned by the cache.</summary>
+    private static HBITMAP RenderLinesToBitmap(HDC referenceDC, int w, int h, int cellWidth, int cellHeight)
+    {
+        // Allocate 1 extra pixel on each edge so border lines drawn at x=w and y=h are within bounds.
+        HDC memDC = PInvoke.CreateCompatibleDC(referenceDC);
+        HBITMAP bitmap = PInvoke.CreateCompatibleBitmap(referenceDC, w + 1, h + 1);
+        HGDIOBJ oldBitmap = PInvoke.SelectObject(memDC, bitmap);
 
         try
         {
-            // Convert from virtual-screen coordinates to window-client coordinates.
-            int left = _currentBounds.left - _virtualOriginX;
-            int top = _currentBounds.top - _virtualOriginY;
-            int right = _currentBounds.right - _virtualOriginX;
-            int bottom = _currentBounds.bottom - _virtualOriginY;
-
-            int cellWidth = (right - left) / 3;
-            int cellHeight = (bottom - top) / 3;
-
-            DrawOuterBorder(deviceCtxHandle, left, top, right, bottom);
-            DrawInnerGridLines(deviceCtxHandle, left, top, right, bottom, cellWidth, cellHeight);
-            DrawCellLabels(deviceCtxHandle, left, top, cellWidth, cellHeight);
+            RECT rect = new() { left = 0, top = 0, right = w + 1, bottom = h + 1 };
+            FillWithTransparencyColor(memDC, rect);
+            GridLineRenderer.DrawGridLines(memDC, cellWidth, cellHeight);
         }
         finally
         {
-            // Restore the previous Windows drawing API GDI object and clean up the pen we created.
-            PInvoke.SelectObject(deviceCtxHandle, oldPen);
-            PInvoke.DeleteObject(cyanPen);
+            PInvoke.SelectObject(memDC, oldBitmap);
+            PInvoke.DeleteDC(memDC);
         }
+
+        return bitmap;
     }
 
-    private static void DrawLine(HDC deviceCtxHandle, int x1, int y1, int x2, int y2)
+    /// <summary>Blits a standalone bitmap onto the destination DC at the given position.</summary>
+    private static void BlitBitmap(HDC destDC, HBITMAP bitmap, int x, int y, int w, int h)
     {
-        // The null parameter expects a pointer, but it is optional.
-        // Need to mark the method as unsafe to pass null here without a pointer safety error.
-        unsafe
+        HDC memDC = PInvoke.CreateCompatibleDC(destDC);
+        HGDIOBJ oldBitmap = PInvoke.SelectObject(memDC, bitmap);
+        try
         {
-            PInvoke.MoveToEx(deviceCtxHandle, x1, y1, null);
+            PInvoke.BitBlt(destDC, x, y, w, h, memDC, 0, 0, ROP_CODE.SRCCOPY);
         }
-        PInvoke.LineTo(deviceCtxHandle, x2, y2);
-    }
-
-    private static void DrawOuterBorder(HDC deviceCtxHandle, int left, int top, int right, int bottom)
-    {
-        DrawLine(deviceCtxHandle, left, top, right, top);
-        DrawLine(deviceCtxHandle, right, top, right, bottom);
-        DrawLine(deviceCtxHandle, right, bottom, left, bottom);
-        DrawLine(deviceCtxHandle, left, bottom, left, top);
-    }
-
-    private static void DrawInnerGridLines(
-        HDC deviceCtxHandle,
-        int left,
-        int top,
-        int right,
-        int bottom,
-        int cellWidth,
-        int cellHeight)
-    {
-        // Two vertical dividers at 1/3 and 2/3 of the width.
-        DrawLine(deviceCtxHandle, left + cellWidth, top, left + cellWidth, bottom);
-        DrawLine(deviceCtxHandle, left + 2 * cellWidth, top, left + 2 * cellWidth, bottom);
-
-        // Two horizontal dividers at 1/3 and 2/3 of the height.
-        DrawLine(deviceCtxHandle, left, top + cellHeight, right, top + cellHeight);
-        DrawLine(deviceCtxHandle, left, top + 2 * cellHeight, right, top + 2 * cellHeight);
+        finally
+        {
+            PInvoke.SelectObject(memDC, oldBitmap);
+            PInvoke.DeleteDC(memDC);
+        }
     }
 
     /// <summary>Draw key labels in the top-left of each cell.</summary>
