@@ -17,6 +17,7 @@
             - current position
             - current grid section
 - Diagram of the updated architecture after refactor
+- Fix: When opening and closing MSPaint after overlay is shown, all visual components disappear.
 
 ## Future nice to have features
 
