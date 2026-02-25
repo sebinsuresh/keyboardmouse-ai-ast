@@ -1,3 +1,17 @@
+## LLM note
+
+Use this intro in chats:
+
+```
+This is an app that allows user to control the mouse using keyboard keys.
+A grid is displayed spanning the entirety of the current screen when user activates it using a hotkey. Additional key listeners are added when this is activated. Labels are displayed within those cells.
+When user presses these keys, the sections within the 3x3 grid are drilled into and become the new focus grid - so the mouse moves to the center of that grid section, and a smaller grid is displayed on screen with further sub divisions.
+When user presses the uppercase K the grid is reset and mouse is moved to center of current screen.
+The other directional keys move the mouse and grid manually.
+A trail line is displayed on the screen for a brief moment when the mouse jumps from one location to another.
+When y/n keys are pressed, left/right mouse click inputs are applied.
+```
+
 ## TODOs
 
 - Feat: make framerate independent move - don't hardcode it to ~60fps
