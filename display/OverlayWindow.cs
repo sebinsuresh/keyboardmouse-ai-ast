@@ -27,7 +27,7 @@ internal sealed class OverlayWindow
     // Set the color key for transparency: RGB(0, 0, 1) — the nearly-black pixel
     private const int TransparentColor = 0x010000; // BGR format
     private const ROP_CODE ReplaceWPatternRasterOpCode = (ROP_CODE)0x00F00021; // PATCOPY
-    private const byte alpha = 128; // ~50%
+    private const byte alpha = 191; // ~75%
 
     // Need unsafe for 
     internal static unsafe void RegisterWindowClass()
@@ -185,7 +185,7 @@ internal sealed class OverlayWindow
     private void PaintGrid(HDC deviceCtxHandle)
     {
         // Create a cyan pen (RGB 0,255,255 — Windows BGR format: 0xFFFF00).
-        HPEN cyanPen = PInvoke.CreatePen(PEN_STYLE.PS_SOLID, 2, new COLORREF(0xFFFF00));
+        HPEN cyanPen = PInvoke.CreatePen(PEN_STYLE.PS_SOLID, 1, new COLORREF(0xFFFF00));
         HGDIOBJ oldPen = PInvoke.SelectObject(deviceCtxHandle, cyanPen);
 
         try
