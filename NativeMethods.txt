@@ -44,3 +44,4 @@ SetTextColor
 TextOut
 ROP_CODE
 GetAsyncKeyState
+CreateFontIndirect

@@ -3,6 +3,7 @@ using Windows.Win32.Foundation;
 using Windows.Win32.Graphics.Gdi;
 using Windows.Win32.UI.WindowsAndMessaging;
 using keyboardmouse.input;
+using System.Runtime.InteropServices;
 
 namespace keyboardmouse.display;
 
@@ -12,6 +13,8 @@ namespace keyboardmouse.display;
 internal sealed class OverlayWindow
 {
     private static OverlayWindow? instance;
+    private static DeleteObjectSafeHandle? _fontHandle;
+    private static HFONT _hFont;
 
     private HWND _windowHandle = HWND.Null;
     private RECT _currentBounds = default;
@@ -118,6 +121,9 @@ internal sealed class OverlayWindow
             PInvoke.DestroyWindow(_windowHandle);
             _windowHandle = HWND.Null;
         }
+
+        _fontHandle?.Dispose();
+        _fontHandle = null;
         instance = null;
     }
 
@@ -254,23 +260,50 @@ internal sealed class OverlayWindow
         const int padding = 6;
         SetBackgroundTransparent(deviceCtxHandle);
 
-        for (int row = 0; row < 3; row++)
+        HGDIOBJ oldFont = PInvoke.SelectObject(deviceCtxHandle, GetOrCreateFont());
+
+        try
         {
-            for (int col = 0; col < 3; col++)
+            for (int row = 0; row < 3; row++)
             {
-                if (!GridInputHandler.CellLabels.TryGetValue((col, row), out var label))
+                for (int col = 0; col < 3; col++)
                 {
-                    continue;
+                    if (!GridInputHandler.CellLabels.TryGetValue((col, row), out var label))
+                    {
+                        continue;
+                    }
+
+                    int cellLeft = left + col * cellWidth;
+                    int cellTop = top + row * cellHeight;
+                    int x = cellLeft + padding;
+                    int y = cellTop + padding;
+
+                    DrawOutlinedText(deviceCtxHandle, x, y, label);
                 }
-
-                int cellLeft = left + col * cellWidth;
-                int cellTop = top + row * cellHeight;
-                int x = cellLeft + padding;
-                int y = cellTop + padding;
-
-                DrawOutlinedText(deviceCtxHandle, x, y, label);
             }
         }
+        finally
+        {
+            PInvoke.SelectObject(deviceCtxHandle, oldFont);
+        }
+    }
+
+    private static HFONT GetOrCreateFont()
+    {
+        if (_fontHandle is null || _fontHandle.IsInvalid)
+        {
+            LOGFONTW lf = new()
+            {
+                lfHeight = -32,  // 24pt at 96 DPI
+                lfWeight = 400,  // FW_NORMAL
+                lfCharSet = FONT_CHARSET.DEFAULT_CHARSET,
+                lfQuality = FONT_QUALITY.CLEARTYPE_QUALITY,
+            };
+            "Segoe UI".AsSpan().CopyTo(MemoryMarshal.CreateSpan(ref lf.lfFaceName[0], 32));
+            _fontHandle = PInvoke.CreateFontIndirect(lf);
+            _hFont = new HFONT(_fontHandle.DangerousGetHandle());
+        }
+        return _hFont;
     }
 
     private static void SetBackgroundTransparent(HDC hdc)
