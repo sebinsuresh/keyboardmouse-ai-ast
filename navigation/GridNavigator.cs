@@ -84,6 +84,9 @@ internal sealed class GridNavigator : IDisposable
             case StopManualMoveCommand:
                 _mover.Stop();
                 break;
+            case MoveToNextMonitorCommand:
+                MoveToNextMonitor();
+                break;
         }
     }
 
@@ -229,6 +232,34 @@ internal sealed class GridNavigator : IDisposable
         }
 
         return monitors[0];
+    }
+
+    /// <summary>
+    /// Cycle to the next monitor in left-to-right, top-to-bottom order.
+    /// Resets the grid to the new monitor's full bounds and moves the mouse to its center.
+    /// No-op if there is only one monitor.
+    /// </summary>
+    private void MoveToNextMonitor()
+    {
+        var monitors = DisplayInfo.GetMonitorRects();
+        if (monitors.Count < 2) return;
+
+        // Sort monitors left-to-right, then top-to-bottom for a stable, predictable cycle order
+        var sorted = monitors.OrderBy(m => m.left).ThenBy(m => m.top).ToList();
+
+        // Find the index of the current monitor by matching left and top coordinates
+        int currentIndex = sorted.FindIndex(m =>
+            m.left == _monitorRect.left && m.top == _monitorRect.top);
+
+        if (currentIndex < 0) currentIndex = 0; // Fallback to first if not found
+
+        int nextIndex = (currentIndex + 1) % sorted.Count;
+        _monitorRect = sorted[nextIndex];
+        _currentBounds = _monitorRect;
+        _history.Clear();
+
+        MoveToCenterOf(_currentBounds);
+        OnBoundsChanged?.Invoke(_currentBounds);
     }
 
     /// <summary>Forward WM_TIMER events from the owner window to the continuous mover.</summary>

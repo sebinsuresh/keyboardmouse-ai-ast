@@ -1,9 +1,6 @@
 ## TODOs
 
 - Feat: make framerate independent move - don't hardcode it to ~60fps
-- Feat: allow moving mouse to next monitor - shift + P
-    - make it cycle around to first monitor
-    - no-op if there's only one monitor
 - Click using keys
     - left and right
     - click and hold should be possible - don't send double click when holding key

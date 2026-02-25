@@ -30,3 +30,9 @@ internal sealed record ManualMoveCommand(int Col, int Row) : GridCommand;
 /// No-op if no manual move is currently active.
 /// </summary>
 internal sealed record StopManualMoveCommand : GridCommand;
+
+/// <summary>
+/// Move the mouse to the center of the next monitor and reset the grid (Shift + P).
+/// No-op if there is only one monitor.
+/// </summary>
+internal sealed record MoveToNextMonitorCommand : GridCommand;

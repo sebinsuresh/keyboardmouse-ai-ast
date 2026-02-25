@@ -9,6 +9,7 @@ internal static class InputTranslator
 {
     private const int VK_SHIFT = 0x10;  // Shift modifier
     private const int VK_H = 0x48;      // Back
+    private const int VK_P = 0x50;      // Move to next monitor
     private const int VK_U = 0x55;      // Top-left
     private const int VK_I = 0x49;      // Top-center
     private const int VK_O = 0x4F;      // Top-right
@@ -45,6 +46,11 @@ internal static class InputTranslator
         if (virtualKey == VK_H)
         {
             return new BackCommand();
+        }
+
+        if (virtualKey == VK_P && modifiers.HasFlag(ModifierKeys.Shift))
+        {
+            return new MoveToNextMonitorCommand();
         }
 
         if (s_keyToGridPosition.TryGetValue(virtualKey, out var pos))
