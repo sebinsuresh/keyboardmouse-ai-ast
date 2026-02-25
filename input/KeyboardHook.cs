@@ -21,6 +21,7 @@ internal sealed class KeyboardHook : IDisposable
     private static KeyboardHook? instance;
     private UnhookWindowsHookExSafeHandle? _keyboardHookHandle;
     private Func<int, ModifierKeys, bool>? _keyboardEventHandler;
+    private Action<int, ModifierKeys>? _keyUpHandler;
 
     private KeyboardHook() { }
 
@@ -34,13 +35,15 @@ internal sealed class KeyboardHook : IDisposable
 
     /// <summary>
     /// Installs the hook and starts routing key-down events to <paramref name="handler"/>.
+    /// Optionally routes key-up events to <paramref name="keyUpHandler"/>.
     /// Calling this when the hook is already installed is a no-op.
     /// </summary>
-    public void Install(Func<int, ModifierKeys, bool> handler)
+    public void Install(Func<int, ModifierKeys, bool> handler, Action<int, ModifierKeys>? keyUpHandler = null)
     {
         if (_keyboardHookHandle is { IsInvalid: false }) return;
 
         _keyboardEventHandler = handler;
+        _keyUpHandler = keyUpHandler;
         _keyboardHookHandle = PInvoke.SetWindowsHookEx(
             WINDOWS_HOOK_ID.WH_KEYBOARD_LL,
             HookCallback,
@@ -51,12 +54,15 @@ internal sealed class KeyboardHook : IDisposable
     // This needs to be static to avoid GC issues with the unmanaged callback
     private static LRESULT HookCallback(int nCode, WPARAM wParam, LPARAM lParam)
     {
-        if (
-            instance?._keyboardEventHandler != null &&
-            nCode >= 0 &&
-            IsKeyDown((uint)wParam.Value))
+        uint msg = (uint)wParam.Value;
+        bool isKeyDown = IsKeyDown(msg);
+        bool isKeyUp = IsKeyUp(msg);
+
+        if (nCode < 0 || instance == null) return PInvoke.CallNextHookEx(default, nCode, wParam, lParam);
+
+        // Handle key-down: skip modifiers and call the key-down handler
+        if (isKeyDown && instance._keyboardEventHandler != null)
         {
-            // unsafe due to KBDLLHOOKSTRUCT pointer dereference
             unsafe
             {
                 var kbd = (KBDLLHOOKSTRUCT*)lParam.Value;
@@ -86,6 +92,30 @@ internal sealed class KeyboardHook : IDisposable
             }
         }
 
+        // Handle key-up: do NOT skip modifiers, call the key-up handler, but always pass on
+        if (isKeyUp && instance._keyUpHandler != null)
+        {
+            unsafe
+            {
+                var kbd = (KBDLLHOOKSTRUCT*)lParam.Value;
+
+                if (kbd != default && kbd->vkCode != 0)
+                {
+                    // Compute active modifiers
+                    var modifiers = ModifierKeys.None;
+                    if ((PInvoke.GetAsyncKeyState(0x10) & 0x8000) != 0)
+                        modifiers |= ModifierKeys.Shift;
+                    if ((PInvoke.GetAsyncKeyState(0x11) & 0x8000) != 0)
+                        modifiers |= ModifierKeys.Control;
+                    if ((PInvoke.GetAsyncKeyState(0x12) & 0x8000) != 0)
+                        modifiers |= ModifierKeys.Alt;
+
+                    instance._keyUpHandler.Invoke((int)kbd->vkCode, modifiers);
+                    // Always pass on key-up events (never swallow)
+                }
+            }
+        }
+
         return PInvoke.CallNextHookEx(default, nCode, wParam, lParam);
     }
 
@@ -99,9 +129,11 @@ internal sealed class KeyboardHook : IDisposable
         _keyboardHookHandle.Dispose(); // internally calls UnhookWindowsHookEx
         _keyboardHookHandle = null;
         _keyboardEventHandler = null;
+        _keyUpHandler = null;
     }
 
     private static bool IsKeyDown(uint msg) => msg is PInvoke.WM_KEYDOWN or PInvoke.WM_SYSKEYDOWN;
+    private static bool IsKeyUp(uint msg) => msg is PInvoke.WM_KEYUP or PInvoke.WM_SYSKEYUP;
 
     public void Dispose() => Uninstall();
 }

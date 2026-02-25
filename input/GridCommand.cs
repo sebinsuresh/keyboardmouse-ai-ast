@@ -19,3 +19,14 @@ internal sealed record ResetCommand(int Col, int Row) : GridCommand;
 /// Navigate back to the previous grid level (H key, no tap sequencing).
 /// </summary>
 internal sealed record BackCommand : GridCommand;
+
+/// <summary>
+/// Start continuous mouse movement in a direction (Shift + directional key down).
+/// </summary>
+internal sealed record ManualMoveCommand(int Col, int Row) : GridCommand;
+
+/// <summary>
+/// Stop continuous mouse movement (Shift + directional key up, or Shift key up).
+/// No-op if no manual move is currently active.
+/// </summary>
+internal sealed record StopManualMoveCommand : GridCommand;

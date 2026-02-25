@@ -7,6 +7,7 @@ namespace keyboardmouse.input;
 /// </summary>
 internal static class InputTranslator
 {
+    private const int VK_SHIFT = 0x10;  // Shift modifier
     private const int VK_H = 0x48;      // Back
     private const int VK_U = 0x55;      // Top-left
     private const int VK_I = 0x49;      // Top-center
@@ -35,7 +36,8 @@ internal static class InputTranslator
     /// Translates a virtual key code and modifiers to a grid command.
     /// H key → BackCommand (modifiers ignored)
     /// Grid key without shift → DrillCommand (navigate into grid section)
-    /// Grid key with shift → ResetCommand (jump to screen region and reset)
+    /// Grid key with shift (center K) → ResetCommand (jump to screen region and reset)
+    /// Grid key with shift (non-center) → ManualMoveCommand (continuous mouse movement)
     /// Returns null if the key is not recognized.
     /// </summary>
     public static GridCommand? TryGetCommand(int virtualKey, ModifierKeys modifiers)
@@ -47,9 +49,37 @@ internal static class InputTranslator
 
         if (s_keyToGridPosition.TryGetValue(virtualKey, out var pos))
         {
-            return modifiers.HasFlag(ModifierKeys.Shift)
-                ? new ResetCommand(pos.col, pos.row)
-                : new DrillCommand(pos.col, pos.row);
+            if (modifiers.HasFlag(ModifierKeys.Shift))
+            {
+                // Center (1,1) gets ResetCommand; all other directions get ManualMoveCommand
+                return pos == (1, 1)
+                    ? new ResetCommand(pos.col, pos.row)
+                    : new ManualMoveCommand(pos.col, pos.row);
+            }
+
+            return new DrillCommand(pos.col, pos.row);
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Translates a key-up event to a stop command.
+    /// Shift key up OR any directional key up → StopManualMoveCommand (stop continuous movement)
+    /// All other keys → null (no command)
+    /// </summary>
+    public static GridCommand? TryGetKeyUpCommand(int virtualKey, ModifierKeys modifiers)
+    {
+        // Stop on Shift key up
+        if (virtualKey == VK_SHIFT)
+        {
+            return new StopManualMoveCommand();
+        }
+
+        // Stop on any directional key up
+        if (s_keyToGridPosition.ContainsKey(virtualKey))
+        {
+            return new StopManualMoveCommand();
         }
 
         return null;

@@ -53,6 +53,19 @@ internal sealed class GridInputHandler : IDisposable
         return true;
     }
 
+    /// <summary>
+    /// Processes a key release with modifiers. Returns <c>true</c> if the key release triggers a command;
+    /// <c>false</c> otherwise.
+    /// </summary>
+    internal bool HandleKeyUp(int virtualKey, ModifierKeys modifiers)
+    {
+        var command = InputTranslator.TryGetKeyUpCommand(virtualKey, modifiers);
+        if (command == null) return false;
+
+        _onCommand(command);
+        return true;
+    }
+
     /// <summary>Dispose (no-op as timer is now removed).</summary>
     public void Dispose() { }
 }

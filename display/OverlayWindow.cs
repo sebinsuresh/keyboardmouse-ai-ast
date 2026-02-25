@@ -114,6 +114,9 @@ internal sealed class OverlayWindow
         }
     }
 
+    /// <summary>Exposes the window handle for use by timer-based components.</summary>
+    internal HWND Handle => _windowHandle;
+
     public void Destroy()
     {
         if (_windowHandle != HWND.Null)
@@ -127,6 +130,11 @@ internal sealed class OverlayWindow
         instance = null;
     }
 
+    /// <summary>
+    /// Called on each WM_TIMER tick — wire this to the navigator's <see cref="navigation.GridNavigator.TimerTick"/> method.
+    /// </summary>
+    internal Action? OnTimer { get; set; }
+
     private static LRESULT WindowProcedure(HWND hwnd, uint msg, WPARAM wParam, LPARAM lParam)
     {
         if (instance == null) return PInvoke.DefWindowProc(hwnd, msg, wParam, lParam);
@@ -135,8 +143,15 @@ internal sealed class OverlayWindow
         {
             PInvoke.WM_PAINT => instance.OnWmPaint(hwnd),
             PInvoke.WM_DESTROY => OnWmDestroy(),
+            PInvoke.WM_TIMER => instance.OnWmTimer(),
             _ => PInvoke.DefWindowProc(hwnd, msg, wParam, lParam)
         };
+    }
+
+    private LRESULT OnWmTimer()
+    {
+        OnTimer?.Invoke();
+        return (LRESULT)0;
     }
 
     private LRESULT OnWmPaint(HWND hwnd)

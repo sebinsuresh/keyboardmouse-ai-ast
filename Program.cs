@@ -15,7 +15,6 @@ static class Program
         OverlayWindow.RegisterWindowClass();
         TrailOverlay.RegisterWindowClass();
 
-        var navigator = new GridNavigator();
         var overlay = new OverlayWindow();
         var trail = new TrailOverlay();
 
@@ -26,6 +25,9 @@ static class Program
             trail.Create();
             trail.Show();
 
+            using var navigator = new GridNavigator(overlay.Handle);
+
+            overlay.OnTimer = navigator.TimerTick;
             navigator.OnBoundsChanged = overlay.UpdateBounds;
 
             using var input = new GridInputHandler(navigator.Execute);
@@ -43,7 +45,9 @@ static class Program
                 else
                 {
                     navigator.Activate();
-                    hook.Install((vk, mods) => input.HandleKey(vk, mods));
+                    hook.Install(
+                        (vk, mods) => input.HandleKey(vk, mods),
+                        keyUpHandler: (vk, mods) => input.HandleKeyUp(vk, mods));
                     overlay.Show();
                 }
             });
