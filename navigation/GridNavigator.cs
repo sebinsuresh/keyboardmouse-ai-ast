@@ -44,6 +44,11 @@ internal sealed class GridNavigator : IDisposable
         _history.Clear();
         _isActive = true;
         OnBoundsChanged?.Invoke(_currentBounds);
+
+        // Center mouse on the monitor when activated
+        int centerX = (_monitorRect.left + _monitorRect.right) / 2;
+        int centerY = (_monitorRect.top + _monitorRect.bottom) / 2;
+        MouseInput.MoveTo(centerX, centerY);
     }
 
     internal void Deactivate()
@@ -153,6 +158,30 @@ internal sealed class GridNavigator : IDisposable
             top = _currentBounds.top + dy,
             right = _currentBounds.right + dx,
             bottom = _currentBounds.bottom + dy,
+        };
+
+        // Clamp bounds to stay within monitor rect
+        int width = _currentBounds.right - _currentBounds.left;
+        int height = _currentBounds.bottom - _currentBounds.top;
+
+        int clampedLeft = _currentBounds.left;
+        if (clampedLeft < _monitorRect.left)
+            clampedLeft = _monitorRect.left;
+        if (clampedLeft + width > _monitorRect.right)
+            clampedLeft = _monitorRect.right - width;
+
+        int clampedTop = _currentBounds.top;
+        if (clampedTop < _monitorRect.top)
+            clampedTop = _monitorRect.top;
+        if (clampedTop + height > _monitorRect.bottom)
+            clampedTop = _monitorRect.bottom - height;
+
+        _currentBounds = new RECT
+        {
+            left = clampedLeft,
+            top = clampedTop,
+            right = clampedLeft + width,
+            bottom = clampedTop + height,
         };
 
         int centerX = (_currentBounds.left + _currentBounds.right) / 2;

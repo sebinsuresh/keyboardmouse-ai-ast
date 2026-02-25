@@ -1,7 +1,5 @@
 ## TODOs
 
-- Fix: hide label when grid is small
-- Fix: don't let the grid leave current monitor bounds
 - Feat: make framerate independent move - don't hardcode it to ~60fps
 - Feat: allow moving mouse to next monitor - shift + P
     - make it cycle around to first monitor

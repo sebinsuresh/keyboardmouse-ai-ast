@@ -273,6 +273,13 @@ internal sealed class GridOverlay
     private static void DrawCellLabels(HDC deviceCtxHandle, int left, int top, int cellWidth, int cellHeight)
     {
         const int padding = 6;
+
+        // Hide labels if grid cells are too small.
+        if (cellHeight < 54)
+        {
+            return;
+        }
+
         SetBackgroundTransparent(deviceCtxHandle);
 
         HGDIOBJ oldFont = PInvoke.SelectObject(deviceCtxHandle, GetOrCreateFont());
