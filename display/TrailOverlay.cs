@@ -45,7 +45,7 @@ internal sealed class TrailOverlay : IDisposable
     private const int TransparentColor = 0x010000; // BGR format
 
     // Animation constants
-    private const double AnimationDurationMs = 1000.0;
+    private const double AnimationDurationMs = 250.0;
     private const double DrawPhaseEndFraction = 0.6;  // draw-on phase ends at 60% of animation
     private const double FadePhaseStartFraction = 0.5; // fade starts at 50%, overlapping slightly
     private const int TailHalfWidth = 2;  // pixels from center to edge at tail
@@ -212,7 +212,7 @@ internal sealed class TrailOverlay : IDisposable
                 255,
                 LAYERED_WINDOW_ATTRIBUTES_FLAGS.LWA_COLORKEY | LAYERED_WINDOW_ATTRIBUTES_FLAGS.LWA_ALPHA
             );
-            PInvoke.InvalidateRect(_hwnd, null, true);
+            InvalidateLine();
             return default;
         }
 
@@ -230,41 +230,85 @@ internal sealed class TrailOverlay : IDisposable
             );
         }
 
-        PInvoke.InvalidateRect(_hwnd, null, true);
+        InvalidateLine();
         return default;
+    }
+
+    /// <summary>
+    /// Invalidates only the bounding corridor of the trail line,
+    /// avoiding a full virtual-screen repaint on every tick.
+    /// </summary>
+    private unsafe void InvalidateLine()
+    {
+        RECT r = ComputeLineBoundingRect();
+        PInvoke.InvalidateRect(_hwnd, &r, true);
     }
 
     private LRESULT OnWmPaint(HWND hwnd)
     {
         HDC hdc = PInvoke.BeginPaint(hwnd, out PAINTSTRUCT ps);
-
         try
         {
-            PInvoke.GetClientRect(hwnd, out RECT clientRect);
-            FillWithTransparencyColor(hdc, clientRect);
-
-            if (_animating)
+            if (!_animating)
             {
-                // Animated trail will be rendered here in a future step.
-                // For now, just show the static line to avoid errors.
-                int x1 = _from.X - _virtualOriginX;
-                int y1 = _from.Y - _virtualOriginY;
-                int x2 = _to.X - _virtualOriginX;
-                int y2 = _to.Y - _virtualOriginY;
+                FillWithTransparencyColor(hdc, ps.rcPaint);
+                return default;
+            }
 
-                HPEN whitePen = PInvoke.CreatePen(PEN_STYLE.PS_SOLID, 4, new COLORREF(0xFFFFFF));
-                HGDIOBJ oldPen = PInvoke.SelectObject(hdc, whitePen);
+            double elapsed = Environment.TickCount64 - _animStartMs;
+            double t = Math.Clamp(elapsed / AnimationDurationMs, 0.0, 1.0);
 
+            // Eased draw progress: phase 1 maps t=[0, DrawPhaseEndFraction] → progress=[0,1].
+            double rawDrawT = Math.Clamp(t / DrawPhaseEndFraction, 0.0, 1.0);
+            double drawProgress = EasingFunction(rawDrawT);
+
+            Point[] verts = ComputePolygonVertices(drawProgress);
+
+            int bmpX = ps.rcPaint.left;
+            int bmpY = ps.rcPaint.top;
+            int w = ps.rcPaint.right - bmpX;
+            int h = ps.rcPaint.bottom - bmpY;
+            if (w <= 0 || h <= 0) return default;
+
+            HDC memDC = PInvoke.CreateCompatibleDC(hdc);
+            HBITMAP memBmp = PInvoke.CreateCompatibleBitmap(hdc, w, h);
+            HGDIOBJ oldBmp = PInvoke.SelectObject(memDC, memBmp);
+
+            try
+            {
+                // Fill entirely with transparency key so the window composites correctly.
+                FillWithTransparencyColor(memDC, new RECT { left = 0, top = 0, right = w, bottom = h });
+
+                // Shift polygon vertices into bitmap-local coordinates.
+                for (int i = 0; i < verts.Length; i++)
+                    verts[i] = new Point(verts[i].X - bmpX, verts[i].Y - bmpY);
+
+                // Draw filled polygon: null pen avoids border bleed, white brush fills shape.
+                HPEN nullPen = PInvoke.CreatePen(PEN_STYLE.PS_NULL, 0, new COLORREF(0));
+                HBRUSH whiteBrush = PInvoke.CreateSolidBrush(new COLORREF(0xFFFFFF));
+                HGDIOBJ oldPen = PInvoke.SelectObject(memDC, nullPen);
+                HGDIOBJ oldBrush = PInvoke.SelectObject(memDC, whiteBrush);
                 try
                 {
-                    unsafe { PInvoke.MoveToEx(hdc, x1, y1, null); }
-                    PInvoke.LineTo(hdc, x2, y2);
+                    PInvoke.Polygon(memDC, verts.AsSpan());
                 }
                 finally
                 {
-                    PInvoke.SelectObject(hdc, oldPen);
-                    PInvoke.DeleteObject(whitePen);
+                    PInvoke.SelectObject(memDC, oldPen);
+                    PInvoke.SelectObject(memDC, oldBrush);
+                    PInvoke.DeleteObject(nullPen);
+                    PInvoke.DeleteObject(whiteBrush);
                 }
+
+                const ROP_CODE SrcCopy = (ROP_CODE)0x00CC0020;
+                PInvoke.BitBlt(hdc, bmpX, bmpY, w, h, memDC, 0, 0, SrcCopy);
+            }
+            finally
+            {
+                // Restore the original bitmap and use the returned HGDIOBJ to delete memBmp.
+                HGDIOBJ bmpAsGdiObj = PInvoke.SelectObject(memDC, oldBmp);
+                PInvoke.DeleteObject(bmpAsGdiObj);
+                PInvoke.DeleteDC(memDC);
             }
         }
         finally
@@ -279,6 +323,73 @@ internal sealed class TrailOverlay : IDisposable
     {
         PInvoke.PostQuitMessage(0);
         return default;
+    }
+
+    /// <summary>
+    /// Computes 4 client-coordinate vertices forming the trail polygon at the given draw progress.
+    /// Vertex order: tail-left, tail-right, tip-right, tip-left (convex quad, suitable for Polygon()).
+    /// </summary>
+    /// <param name="drawProgress">0 = collapsed at tail, 1 = full extent to <c>_to</c>.</param>
+    private Point[] ComputePolygonVertices(double drawProgress)
+    {
+        double dx = _to.X - _from.X;
+        double dy = _to.Y - _from.Y;
+        double len = Math.Sqrt(dx * dx + dy * dy);
+
+        // Perpendicular unit vector (rotate direction 90 degrees).
+        double px, py;
+        if (len < 0.001)
+        {
+            px = 1.0;
+            py = 0.0;
+        }
+        else
+        {
+            px = -dy / len;
+            py = dx / len;
+        }
+
+        // Tip position lerped along the line at current progress.
+        double tipX = _from.X + dx * drawProgress;
+        double tipY = _from.Y + dy * drawProgress;
+
+        int tailCX = _from.X - _virtualOriginX;
+        int tailCY = _from.Y - _virtualOriginY;
+        int tipCX = (int)Math.Round(tipX) - _virtualOriginX;
+        int tipCY = (int)Math.Round(tipY) - _virtualOriginY;
+
+        return
+        [
+            new Point((int)Math.Round(tailCX + px * TailHalfWidth), (int)Math.Round(tailCY + py * TailHalfWidth)),
+            new Point((int)Math.Round(tailCX - px * TailHalfWidth), (int)Math.Round(tailCY - py * TailHalfWidth)),
+            new Point((int)Math.Round(tipCX  - px * TipHalfWidth),  (int)Math.Round(tipCY  - py * TipHalfWidth)),
+            new Point((int)Math.Round(tipCX  + px * TipHalfWidth),  (int)Math.Round(tipCY  + py * TipHalfWidth)),
+        ];
+    }
+
+    /// <summary>
+    /// Returns the bounding rect of the whole potential trail corridor (tail → _to),
+    /// padded by TipHalfWidth + a few pixels. Used to restrict InvalidateRect to the
+    /// trail area rather than repainting the full virtual screen on every tick.
+    /// </summary>
+    private RECT ComputeLineBoundingRect()
+    {
+        // Use the full-extent vertices (drawProgress = 1) so the rect always covers
+        // every possible polygon position during the animation.
+        Point[] verts = ComputePolygonVertices(1.0);
+
+        int minX = int.MaxValue, minY = int.MaxValue;
+        int maxX = int.MinValue, maxY = int.MinValue;
+        foreach (Point v in verts)
+        {
+            if (v.X < minX) minX = v.X;
+            if (v.Y < minY) minY = v.Y;
+            if (v.X > maxX) maxX = v.X;
+            if (v.Y > maxY) maxY = v.Y;
+        }
+
+        int pad = TipHalfWidth + 4;
+        return new RECT { left = minX - pad, top = minY - pad, right = maxX + pad, bottom = maxY + pad };
     }
 
     private static void FillWithTransparencyColor(HDC hdc, RECT clientRect)
