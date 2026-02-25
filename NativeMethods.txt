@@ -50,3 +50,5 @@ WM_SYSKEYUP
 SetTimer
 KillTimer
 WM_TIMER
+GetDpiForWindow
+WM_DPICHANGED
