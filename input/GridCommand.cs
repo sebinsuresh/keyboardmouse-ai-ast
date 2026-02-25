@@ -38,11 +38,15 @@ internal sealed record StopManualMoveCommand : GridCommand;
 internal sealed record MoveToNextMonitorCommand : GridCommand;
 
 /// <summary>
-/// Send a left mouse button click at the current cursor position (Y key).
+/// Which mouse button to press.
 /// </summary>
-internal sealed record LeftClickCommand : GridCommand;
+internal enum MouseButton
+{
+    Left,
+    Right,
+}
 
 /// <summary>
-/// Send a right mouse button click at the current cursor position (N key).
+/// Send a mouse button click at the current cursor position (Y = left, N = right).
 /// </summary>
-internal sealed record RightClickCommand : GridCommand;
+internal sealed record MouseClickCommand(MouseButton Button) : GridCommand;

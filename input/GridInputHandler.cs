@@ -52,7 +52,7 @@ internal sealed class GridInputHandler
         if (command == null) return false;
 
         // Guard click commands: don't fire if the key is already pressed (Windows sends repeat WM_KEYDOWN)
-        if ((command is LeftClickCommand or RightClickCommand) && _pressedKeys.Contains(virtualKey))
+        if (command is MouseClickCommand && _pressedKeys.Contains(virtualKey))
         {
             return true; // Swallow the repeat, don't dispatch
         }

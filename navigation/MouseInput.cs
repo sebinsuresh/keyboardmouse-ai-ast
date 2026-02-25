@@ -1,6 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 using keyboardmouse.display;
+using keyboardmouse.input;
 using Windows.Win32;
 using Windows.Win32.UI.Input.KeyboardAndMouse;
 
@@ -38,37 +39,21 @@ internal static class MouseInput
     }
 
     /// <summary>
-    /// Sends a left mouse button click (down + up) at the current cursor position.
+    /// Sends a mouse button click (down + up) at the current cursor position.
     /// </summary>
-    internal static void LeftClick()
+    internal static void Click(MouseButton button)
     {
         Span<INPUT> inputs = stackalloc INPUT[2];
 
-        // Left button down
+        bool isLeft = button == MouseButton.Left;
         inputs[0].type = INPUT_TYPE.INPUT_MOUSE;
-        inputs[0].Anonymous.mi.dwFlags = MOUSE_EVENT_FLAGS.MOUSEEVENTF_LEFTDOWN;
-
-        // Left button up
+        inputs[0].Anonymous.mi.dwFlags = isLeft ?
+            MOUSE_EVENT_FLAGS.MOUSEEVENTF_LEFTDOWN :
+            MOUSE_EVENT_FLAGS.MOUSEEVENTF_RIGHTDOWN;
         inputs[1].type = INPUT_TYPE.INPUT_MOUSE;
-        inputs[1].Anonymous.mi.dwFlags = MOUSE_EVENT_FLAGS.MOUSEEVENTF_LEFTUP;
-
-        PInvoke.SendInput(inputs, s_inputSize);
-    }
-
-    /// <summary>
-    /// Sends a right mouse button click (down + up) at the current cursor position.
-    /// </summary>
-    internal static void RightClick()
-    {
-        Span<INPUT> inputs = stackalloc INPUT[2];
-
-        // Right button down
-        inputs[0].type = INPUT_TYPE.INPUT_MOUSE;
-        inputs[0].Anonymous.mi.dwFlags = MOUSE_EVENT_FLAGS.MOUSEEVENTF_RIGHTDOWN;
-
-        // Right button up
-        inputs[1].type = INPUT_TYPE.INPUT_MOUSE;
-        inputs[1].Anonymous.mi.dwFlags = MOUSE_EVENT_FLAGS.MOUSEEVENTF_RIGHTUP;
+        inputs[1].Anonymous.mi.dwFlags = isLeft ?
+            MOUSE_EVENT_FLAGS.MOUSEEVENTF_LEFTUP :
+            MOUSE_EVENT_FLAGS.MOUSEEVENTF_RIGHTUP;
 
         PInvoke.SendInput(inputs, s_inputSize);
     }

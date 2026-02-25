@@ -87,11 +87,8 @@ internal sealed class GridNavigator : IDisposable
             case MoveToNextMonitorCommand:
                 MoveToNextMonitor();
                 break;
-            case LeftClickCommand:
-                MouseInput.LeftClick();
-                break;
-            case RightClickCommand:
-                MouseInput.RightClick();
+            case MouseClickCommand click:
+                MouseInput.Click(click.Button);
                 break;
         }
     }

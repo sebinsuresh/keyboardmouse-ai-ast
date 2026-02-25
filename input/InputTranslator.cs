@@ -50,15 +50,8 @@ internal static class InputTranslator
             return new BackCommand();
         }
 
-        if (virtualKey == VK_Y)
-        {
-            return new LeftClickCommand();
-        }
-
-        if (virtualKey == VK_N)
-        {
-            return new RightClickCommand();
-        }
+        if (virtualKey == VK_Y) return new MouseClickCommand(MouseButton.Left);
+        if (virtualKey == VK_N) return new MouseClickCommand(MouseButton.Right);
 
         if (virtualKey == VK_P && modifiers.HasFlag(ModifierKeys.Shift))
         {
