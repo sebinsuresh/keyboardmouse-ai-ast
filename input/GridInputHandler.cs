@@ -18,6 +18,7 @@ namespace keyboardmouse.input;
 internal sealed class GridInputHandler
 {
     private readonly Action<GridCommand> _onCommand;
+    private readonly HashSet<int> _pressedKeys = [];
 
     /// <summary>
     /// Public, extendable mapping from grid cell (col,row) to the display label shown in the overlay.
@@ -43,19 +44,28 @@ internal sealed class GridInputHandler
     /// <summary>
     /// Processes a key press with modifiers. Returns <c>true</c> if the key is a recognized navigation key
     /// (caller should swallow it); <c>false</c> otherwise.
+    /// Click commands (Y/N) are guarded to prevent firing repeatedly on key hold.
     /// </summary>
     internal bool HandleKey(int virtualKey, ModifierKeys modifiers)
     {
         var command = InputTranslator.TryGetCommand(virtualKey, modifiers);
         if (command == null) return false;
 
+        // Guard click commands: don't fire if the key is already pressed (Windows sends repeat WM_KEYDOWN)
+        if ((command is LeftClickCommand or RightClickCommand) && _pressedKeys.Contains(virtualKey))
+        {
+            return true; // Swallow the repeat, don't dispatch
+        }
+
+        _pressedKeys.Add(virtualKey);
         _onCommand(command);
         return true;
     }
 
-    /// <summary>Processes a key release, firing a stop command if applicable.</summary>
+    /// <summary>Processes a key release, firing a stop command if applicable and clearing the pressed-key tracker.</summary>
     internal void HandleKeyUp(int virtualKey, ModifierKeys modifiers)
     {
+        _pressedKeys.Remove(virtualKey);
         var command = InputTranslator.TryGetKeyUpCommand(virtualKey);
         if (command != null) _onCommand(command);
     }

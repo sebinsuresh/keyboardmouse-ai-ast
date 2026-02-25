@@ -36,3 +36,13 @@ internal sealed record StopManualMoveCommand : GridCommand;
 /// No-op if there is only one monitor.
 /// </summary>
 internal sealed record MoveToNextMonitorCommand : GridCommand;
+
+/// <summary>
+/// Send a left mouse button click at the current cursor position (Y key).
+/// </summary>
+internal sealed record LeftClickCommand : GridCommand;
+
+/// <summary>
+/// Send a right mouse button click at the current cursor position (N key).
+/// </summary>
+internal sealed record RightClickCommand : GridCommand;

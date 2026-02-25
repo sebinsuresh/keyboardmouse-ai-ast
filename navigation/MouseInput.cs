@@ -36,4 +36,40 @@ internal static class MouseInput
 
         PInvoke.SendInput(new ReadOnlySpan<INPUT>(ref input), s_inputSize);
     }
+
+    /// <summary>
+    /// Sends a left mouse button click (down + up) at the current cursor position.
+    /// </summary>
+    internal static void LeftClick()
+    {
+        Span<INPUT> inputs = stackalloc INPUT[2];
+
+        // Left button down
+        inputs[0].type = INPUT_TYPE.INPUT_MOUSE;
+        inputs[0].Anonymous.mi.dwFlags = MOUSE_EVENT_FLAGS.MOUSEEVENTF_LEFTDOWN;
+
+        // Left button up
+        inputs[1].type = INPUT_TYPE.INPUT_MOUSE;
+        inputs[1].Anonymous.mi.dwFlags = MOUSE_EVENT_FLAGS.MOUSEEVENTF_LEFTUP;
+
+        PInvoke.SendInput(inputs, s_inputSize);
+    }
+
+    /// <summary>
+    /// Sends a right mouse button click (down + up) at the current cursor position.
+    /// </summary>
+    internal static void RightClick()
+    {
+        Span<INPUT> inputs = stackalloc INPUT[2];
+
+        // Right button down
+        inputs[0].type = INPUT_TYPE.INPUT_MOUSE;
+        inputs[0].Anonymous.mi.dwFlags = MOUSE_EVENT_FLAGS.MOUSEEVENTF_RIGHTDOWN;
+
+        // Right button up
+        inputs[1].type = INPUT_TYPE.INPUT_MOUSE;
+        inputs[1].Anonymous.mi.dwFlags = MOUSE_EVENT_FLAGS.MOUSEEVENTF_RIGHTUP;
+
+        PInvoke.SendInput(inputs, s_inputSize);
+    }
 }

@@ -19,6 +19,8 @@ internal static class InputTranslator
     private const int VK_M = 0x4D;      // Bot-left
     private const int VK_COMMA = 0xBC;  // Bot-center (,)
     private const int VK_PERIOD = 0xBE; // Bot-right (.)
+    private const int VK_Y = 0x59;      // Left click
+    private const int VK_N = 0x4E;      // Right click
 
     private static readonly Dictionary<int, (int col, int row)> s_keyToGridPosition = new()
     {
@@ -46,6 +48,16 @@ internal static class InputTranslator
         if (virtualKey == VK_H)
         {
             return new BackCommand();
+        }
+
+        if (virtualKey == VK_Y)
+        {
+            return new LeftClickCommand();
+        }
+
+        if (virtualKey == VK_N)
+        {
+            return new RightClickCommand();
         }
 
         if (virtualKey == VK_P && modifiers.HasFlag(ModifierKeys.Shift))
