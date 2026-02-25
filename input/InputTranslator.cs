@@ -68,7 +68,7 @@ internal static class InputTranslator
     /// Shift key up OR any directional key up → StopManualMoveCommand (stop continuous movement)
     /// All other keys → null (no command)
     /// </summary>
-    public static GridCommand? TryGetKeyUpCommand(int virtualKey, ModifierKeys modifiers)
+    public static GridCommand? TryGetKeyUpCommand(int virtualKey)
     {
         // Stop on Shift key up
         if (virtualKey == VK_SHIFT)

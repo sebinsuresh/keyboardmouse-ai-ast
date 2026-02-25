@@ -30,7 +30,7 @@ static class Program
             overlay.OnTimer = navigator.TimerTick;
             navigator.OnBoundsChanged = overlay.UpdateBounds;
 
-            using var input = new GridInputHandler(navigator.Execute);
+            var input = new GridInputHandler(navigator.Execute);
             using var hook = KeyboardHook.Create();
             using var hotkey = new HotKeyListener(HOTKEY_ID, (uint)VIRTUAL_KEY.VK_F8);
 
@@ -47,7 +47,7 @@ static class Program
                     navigator.Activate();
                     hook.Install(
                         (vk, mods) => input.HandleKey(vk, mods),
-                        keyUpHandler: (vk, mods) => input.HandleKeyUp(vk, mods));
+                        keyUpHandler: input.HandleKeyUp);
                     overlay.Show();
                 }
             });

@@ -75,16 +75,7 @@ internal sealed class KeyboardHook : IDisposable
                         return PInvoke.CallNextHookEx(default, nCode, wParam, lParam);
                     }
 
-                    // Compute active modifiers
-                    var modifiers = ModifierKeys.None;
-                    if ((PInvoke.GetAsyncKeyState(0x10) & 0x8000) != 0)
-                        modifiers |= ModifierKeys.Shift;
-                    if ((PInvoke.GetAsyncKeyState(0x11) & 0x8000) != 0)
-                        modifiers |= ModifierKeys.Control;
-                    if ((PInvoke.GetAsyncKeyState(0x12) & 0x8000) != 0)
-                        modifiers |= ModifierKeys.Alt;
-
-                    if (instance._keyboardEventHandler.Invoke((int)kbd->vkCode, modifiers) == true)
+                    if (instance._keyboardEventHandler.Invoke((int)kbd->vkCode, ReadModifiers()))
                     {
                         return (LRESULT)1;
                     }
@@ -101,17 +92,7 @@ internal sealed class KeyboardHook : IDisposable
 
                 if (kbd != default && kbd->vkCode != 0)
                 {
-                    // Compute active modifiers
-                    var modifiers = ModifierKeys.None;
-                    if ((PInvoke.GetAsyncKeyState(0x10) & 0x8000) != 0)
-                        modifiers |= ModifierKeys.Shift;
-                    if ((PInvoke.GetAsyncKeyState(0x11) & 0x8000) != 0)
-                        modifiers |= ModifierKeys.Control;
-                    if ((PInvoke.GetAsyncKeyState(0x12) & 0x8000) != 0)
-                        modifiers |= ModifierKeys.Alt;
-
-                    instance._keyUpHandler.Invoke((int)kbd->vkCode, modifiers);
-                    // Always pass on key-up events (never swallow)
+                    instance._keyUpHandler.Invoke((int)kbd->vkCode, ReadModifiers());
                 }
             }
         }
@@ -134,6 +115,16 @@ internal sealed class KeyboardHook : IDisposable
 
     private static bool IsKeyDown(uint msg) => msg is PInvoke.WM_KEYDOWN or PInvoke.WM_SYSKEYDOWN;
     private static bool IsKeyUp(uint msg) => msg is PInvoke.WM_KEYUP or PInvoke.WM_SYSKEYUP;
+
+    /// <summary>Samples the current state of Shift, Ctrl, and Alt via <c>GetAsyncKeyState</c>.</summary>
+    private static ModifierKeys ReadModifiers()
+    {
+        var mods = ModifierKeys.None;
+        if ((PInvoke.GetAsyncKeyState(0x10) & 0x8000) != 0) mods |= ModifierKeys.Shift;
+        if ((PInvoke.GetAsyncKeyState(0x11) & 0x8000) != 0) mods |= ModifierKeys.Control;
+        if ((PInvoke.GetAsyncKeyState(0x12) & 0x8000) != 0) mods |= ModifierKeys.Alt;
+        return mods;
+    }
 
     public void Dispose() => Uninstall();
 }

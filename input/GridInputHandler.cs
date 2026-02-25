@@ -15,7 +15,7 @@ namespace keyboardmouse.input;
 /// Back key:
 ///   h → navigate to the previous grid level (modifiers ignored)
 /// </summary>
-internal sealed class GridInputHandler : IDisposable
+internal sealed class GridInputHandler
 {
     private readonly Action<GridCommand> _onCommand;
 
@@ -53,19 +53,10 @@ internal sealed class GridInputHandler : IDisposable
         return true;
     }
 
-    /// <summary>
-    /// Processes a key release with modifiers. Returns <c>true</c> if the key release triggers a command;
-    /// <c>false</c> otherwise.
-    /// </summary>
-    internal bool HandleKeyUp(int virtualKey, ModifierKeys modifiers)
+    /// <summary>Processes a key release, firing a stop command if applicable.</summary>
+    internal void HandleKeyUp(int virtualKey, ModifierKeys modifiers)
     {
-        var command = InputTranslator.TryGetKeyUpCommand(virtualKey, modifiers);
-        if (command == null) return false;
-
-        _onCommand(command);
-        return true;
+        var command = InputTranslator.TryGetKeyUpCommand(virtualKey);
+        if (command != null) _onCommand(command);
     }
-
-    /// <summary>Dispose (no-op as timer is now removed).</summary>
-    public void Dispose() { }
 }

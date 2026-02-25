@@ -69,8 +69,5 @@ internal sealed class ContinuousMover : IDisposable
         _onTick(_dx * StepPx, _dy * StepPx);
     }
 
-    /// <summary>Exposes the timer ID so the owner window can route WM_TIMER correctly.</summary>
-    internal static nuint Id => TimerId;
-
     public void Dispose() => Stop();
 }

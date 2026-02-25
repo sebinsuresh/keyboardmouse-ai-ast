@@ -67,7 +67,6 @@ internal sealed class GridNavigator : IDisposable
                 DrillDown(drill.Col, drill.Row);
                 break;
             case ResetCommand reset:
-                _mover.Stop();
                 _history.Clear();
                 JumpToHalf(reset.Col, reset.Row);
                 break;
