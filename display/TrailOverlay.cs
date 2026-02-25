@@ -50,6 +50,8 @@ internal sealed class TrailOverlay : IDisposable
     private const double FadePhaseStartFraction = 0.5; // fade starts at 50%, overlapping slightly
     private const int TailHalfWidth = 2;  // pixels from center to edge at tail
     private const int TipHalfWidth = 10;  // pixels from center to edge at tip
+    private const int TargetTimerFps = 125;  // Guarantees ≥1 invalidation per vblank at 60Hz and 100Hz monitors
+    private const int TimerIntervalMs = 1000 / TargetTimerFps;  // 8ms
 
     /// <summary>Ease-in-out quadratic: 2t² for t<0.5, 1-(-2t+2)²/2 for t≥0.5.</summary>
     private static double EaseInOutQuadratic(double t)
@@ -174,8 +176,8 @@ internal sealed class TrailOverlay : IDisposable
             LAYERED_WINDOW_ATTRIBUTES_FLAGS.LWA_COLORKEY | LAYERED_WINDOW_ATTRIBUTES_FLAGS.LWA_ALPHA
         );
 
-        // Start (or restart) the ~60fps animation timer.
-        PInvoke.SetTimer(_hwnd, AnimTimerId, 16, null);
+        // Fire at TargetTimerFps to ensure smooth animation across monitor refresh rates.
+        PInvoke.SetTimer(_hwnd, AnimTimerId, TimerIntervalMs, null);
         PInvoke.InvalidateRect(_hwnd, null, true);
     }
 
