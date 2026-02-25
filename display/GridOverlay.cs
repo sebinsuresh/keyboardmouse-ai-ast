@@ -8,11 +8,11 @@ using System.Runtime.InteropServices;
 namespace keyboardmouse.display;
 
 /// <summary>
-/// Topmost click-through layered overlay window displaying a cyan 3×3 grid.
+/// Topmost click-through layered overlay window displaying a 3×3 grid.
 /// </summary>
-internal sealed class OverlayWindow
+internal sealed class GridOverlay
 {
-    private static OverlayWindow? instance;
+    private static GridOverlay? instance;
     private static DeleteObjectSafeHandle? _fontHandle;
     private static HFONT _hFont;
 

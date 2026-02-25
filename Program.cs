@@ -12,10 +12,10 @@ static class Program
     [STAThread]
     static void Main()
     {
-        OverlayWindow.RegisterWindowClass();
+        GridOverlay.RegisterWindowClass();
         TrailOverlay.RegisterWindowClass();
 
-        var overlay = new OverlayWindow();
+        var overlay = new GridOverlay();
         var trail = new TrailOverlay();
 
         try
