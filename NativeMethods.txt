@@ -35,6 +35,11 @@ LineTo
 DestroyWindow
 GetClientRect
 PatBlt
+CreateCompatibleDC
+CreateCompatibleBitmap
+BitBlt
+DeleteDC
+AlphaBlend
 WM_KEYDOWN
 WM_SYSKEYDOWN
 VIRTUAL_KEY
