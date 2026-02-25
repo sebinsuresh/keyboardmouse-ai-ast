@@ -30,7 +30,7 @@ internal sealed class GridOverlay
     // Set the color key for transparency: RGB(0, 0, 1) — the nearly-black pixel
     private const int TransparentColor = 0x010000; // BGR format
     private const ROP_CODE ReplaceWPatternRasterOpCode = (ROP_CODE)0x00F00021; // PATCOPY
-    private const byte alpha = 191; // ~75%
+    private const byte alpha = 100; // range: 1 - 255
 
     // Need unsafe for 
     internal static unsafe void RegisterWindowClass()
