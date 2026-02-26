@@ -58,3 +58,4 @@ WM_TIMER
 GetDpiForWindow
 WM_DPICHANGED
 Polygon
+WM_SIZE
