@@ -56,3 +56,4 @@ SetTimer
 KillTimer
 WM_TIMER
 Polygon
+WM_SIZE

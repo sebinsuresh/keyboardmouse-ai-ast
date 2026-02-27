@@ -39,6 +39,7 @@ internal sealed class TrailOverlay : IDisposable
         WINDOW_EX_STYLE.WS_EX_LAYERED |
         WINDOW_EX_STYLE.WS_EX_TRANSPARENT |
         WINDOW_EX_STYLE.WS_EX_TOPMOST |
+        WINDOW_EX_STYLE.WS_EX_TOOLWINDOW |
         WINDOW_EX_STYLE.WS_EX_NOACTIVATE;
 
     // Use the same nearly-black color key as the other overlay so we can erase by filling with this color.
@@ -190,6 +191,7 @@ internal sealed class TrailOverlay : IDisposable
             PInvoke.WM_PAINT => s_instance.OnWmPaint(hwnd),
             PInvoke.WM_TIMER => s_instance.OnWmTimer(),
             PInvoke.WM_DESTROY => OnWmDestroy(),
+            PInvoke.WM_SIZE => OnWmSize(hwnd, wParam),
             _ => PInvoke.DefWindowProc(hwnd, msg, wParam, lParam)
         };
     }
@@ -324,6 +326,15 @@ internal sealed class TrailOverlay : IDisposable
     private static LRESULT OnWmDestroy()
     {
         PInvoke.PostQuitMessage(0);
+        return default;
+    }
+
+    private static LRESULT OnWmSize(HWND hwnd, WPARAM wParam)
+    {
+        // Defend against external minimization (e.g. residual Win+D handling on older shell builds).
+        const nuint SIZE_MINIMIZED = 1;
+        if (wParam.Value == SIZE_MINIMIZED)
+            PInvoke.ShowWindow(hwnd, SHOW_WINDOW_CMD.SW_SHOWNOACTIVATE);
         return default;
     }
 

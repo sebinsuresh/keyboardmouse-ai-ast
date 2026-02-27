@@ -29,6 +29,7 @@ internal sealed class GridOverlay
         WINDOW_EX_STYLE.WS_EX_LAYERED |
         WINDOW_EX_STYLE.WS_EX_TRANSPARENT |
         WINDOW_EX_STYLE.WS_EX_TOPMOST |
+        WINDOW_EX_STYLE.WS_EX_TOOLWINDOW |
         WINDOW_EX_STYLE.WS_EX_NOACTIVATE;
 
     // Set the color key for transparency: RGB(0, 0, 1) — the nearly-black pixel
@@ -152,6 +153,7 @@ internal sealed class GridOverlay
             PInvoke.WM_PAINT => instance.OnWmPaint(hwnd),
             PInvoke.WM_DESTROY => OnWmDestroy(),
             PInvoke.WM_TIMER => instance.OnWmTimer(),
+            PInvoke.WM_SIZE => OnWmSize(hwnd, wParam),
             _ => PInvoke.DefWindowProc(hwnd, msg, wParam, lParam)
         };
     }
@@ -160,6 +162,15 @@ internal sealed class GridOverlay
     {
         OnTimer?.Invoke();
         return (LRESULT)0;
+    }
+
+    private static LRESULT OnWmSize(HWND hwnd, WPARAM wParam)
+    {
+        // Defend against external minimization (e.g. residual Win+D handling on older shell builds).
+        const nuint SIZE_MINIMIZED = 1;
+        if (wParam.Value == SIZE_MINIMIZED)
+            PInvoke.ShowWindow(hwnd, SHOW_WINDOW_CMD.SW_SHOWNOACTIVATE);
+        return default;
     }
 
     private LRESULT OnWmPaint(HWND hwnd)
